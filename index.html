@@ -529,6 +529,89 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDttIrm6BxTtW2e20vGWS2Mqxitwxp6J7I",
+  authDomain: "mdro-379fd.firebaseapp.com",
+  projectId: "mdro-379fd",
+  storageBucket: "mdro-379fd.firebasestorage.app",
+  messagingSenderId: "409523753719",
+  appId: "1:409523753719:web:06b09908f23a3f6ec1f9f2"
+};
+let db = null;
+let isOnline = navigator.onLine;
+const SYNC_QUEUE_KEY = 'mdro_sync_queue';
+
+async function initFirebase() {
+  try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js");
+    const { getFirestore, doc, setDoc, collection, getDocs } = 
+      await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js");
+    const app = initializeApp(FIREBASE_CONFIG);
+    db = getFirestore(app);
+    window._fs = { doc, setDoc, collection, getDocs, db };
+    updateSyncBadge();
+    if (isOnline) { await pullFromCloud(); await flushSyncQueue(); }
+  } catch(e) { console.warn('Firebase:', e); }
+}
+
+async function pushToCloud(key, data) {
+  if (!db || !isOnline) { addToQueue(key, data); return; }
+  try {
+    const { doc, setDoc, db: fdb } = window._fs;
+    await setDoc(doc(fdb, 'mdro_data', key.replace('mdro_','')), 
+      { data: JSON.stringify(data), updatedAt: Date.now() });
+  } catch(e) { addToQueue(key, data); }
+}
+
+async function pullFromCloud() {
+  if (!db || !isOnline) return;
+  try {
+    const { collection, getDocs, db: fdb } = window._fs;
+    const snap = await getDocs(collection(fdb, 'mdro_data'));
+    let n = 0;
+    snap.forEach(d => {
+      const key = 'mdro_' + d.id;
+      const cloud = d.data();
+      const local = localStorage.getItem(key);
+      const localTs = local ? (tryParse(local)?._ts || 0) : 0;
+      if ((cloud.updatedAt||0) > localTs) {
+        localStorage.setItem(key, cloud.data);
+        n++;
+      }
+    });
+    if (n > 0) { buildMonthGrid(); refreshCaseList(); refreshReport(); toast('✅ تم المزامنة من السحابة'); }
+  } catch(e) { console.warn(e); }
+}
+
+function addToQueue(key, data) {
+  const q = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
+  q[key] = { data, ts: Date.now() };
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q));
+}
+
+async function flushSyncQueue() {
+  if (!db || !isOnline) return;
+  const q = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
+  const keys = Object.keys(q);
+  for (const k of keys) {
+    try { await pushToCloud(k, tryParse(q[k].data) || q[k].data); delete q[k]; } catch(e) {}
+  }
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q));
+}
+
+function tryParse(s) { try { return JSON.parse(s); } catch { return null; } }
+
+function updateSyncBadge() {
+  const b = document.getElementById('syncBadge');
+  if (!b) return;
+  b.textContent = !isOnline ? '📴 أوفلاين' : db ? '☁️ مزامن' : '⚡ محلي';
+  b.style.background = !isOnline ? '#e67e22' : db ? '#1a8a5a' : '#6b7f96';
+}
+
+window.addEventListener('online', async () => { isOnline=true; updateSyncBadge(); await flushSyncQueue(); toast('🌐 متصل – جاري المزامنة'); });
+window.addEventListener('offline', () => { isOnline=false; updateSyncBadge(); toast('📴 أوفلاين – يحفظ محلياً'); });
+</script>
 </head>
 <body>
 
@@ -539,7 +622,7 @@
     <span class="header-credit">Developed by Ph. Ahmed Elsayed · MTH Infection Control Specialist</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <span class="offline-badge">⚡ أوفلاين</span>
+    <span id="syncBadge" class="offline-badge">⚡ محلي</span>
     <button onclick="openChangePwd()" title="إعدادات الحساب"
       style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;padding:6px 10px;font-size:16px;cursor:pointer;line-height:1">⚙️</button>
   </div>
@@ -905,7 +988,10 @@ const RISK_FACTORS = ['سكري','ضغط','كلى','كبد','مناعي','سكر
 // STORAGE
 // ════════════════════════════════════════════
 function storageKey(year, month, type) { return `mdro_${year}_${month}_${type}`; }
-function save(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+function save(key, data) {
+  localStorage.setItem(key, JSON.stringify(data));
+  pushToCloud(key, data);
+}
 function load(key, def=[]) { try { return JSON.parse(localStorage.getItem(key)) || def; } catch { return def; } }
 
 function getCases(year, month) { return load(storageKey(year, month, 'cases')); }
@@ -958,6 +1044,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('f_blood_culture').addEventListener('change', e => {
     document.getElementById('prev_culture_wrap').style.display = e.target.value === 'نعم' ? 'block' : 'none';
   });
+  initFirebase();
 });
 
 function populateSelects() {
@@ -2594,8 +2681,8 @@ function checkSession() {
   if (session) {
     document.getElementById('loginScreen').style.display = 'none';
   }
+  updateSyncBadge();
 }
-
 // Change password modal
 function openChangePwd() {
   document.getElementById('pwdOld').value = '';
