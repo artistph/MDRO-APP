@@ -1,28 +1,26 @@
-{
-  "id": "mdro-mth-app",
-  "name": "MDRO – مستشفى المطرية",
-  "short_name": "MDRO",
-  "description": "نظام ترصد الميكروبات المقاومة",
-  "start_url": "https://artistph.github.io/MDRO-APP/index.html",
-"scope": "https://artistph.github.io/MDRO-APP/",
-  "display": "standalone",
-  "background_color": "#0f2a4a",
-  "theme_color": "#0f2a4a",
-  "orientation": "portrait",
-  "lang": "ar",
-  "categories": ["medical", "health", "utilities"],
-  "icons": [
+"icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
-}
