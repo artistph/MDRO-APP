@@ -1,14 +1,19 @@
-const CACHE = 'mdro-v6';
+const CACHE = 'mdro-v7';
+const BASE = 'https://artistph.github.io/MDRO-APP';
 const FILES = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  BASE + '/',
+  BASE + '/index.html',
+  BASE + '/manifest.json',
+  BASE + '/icon-192.png',
+  BASE + '/icon-512.png'
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(FILES))
+      .catch(err => console.log('Cache error:', err))
+  );
   self.skipWaiting();
 });
 
