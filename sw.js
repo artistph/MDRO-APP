@@ -1,10 +1,10 @@
-const CACHE = 'mdro-v5';
+const CACHE = 'mdro-v6';
 const FILES = [
-  'https://artistph.github.io/MDRO-APP/',
-  'https://artistph.github.io/MDRO-APP/index.html',
-  'https://artistph.github.io/MDRO-APP/manifest.json',
-  'https://artistph.github.io/MDRO-APP/icon-192.png',
-  'https://artistph.github.io/MDRO-APP/icon-512.png'
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', e => {
@@ -23,6 +23,12 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        const clone = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, clone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
