@@ -3,7 +3,7 @@
 // تعليمات الترقية: غيّر CACHE_VERSION فقط عند كل إصدار جديد
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = 'mdro-v90';
+const CACHE_VERSION = 'mdro-v91';
 const CACHE = CACHE_VERSION;
 
 const CORE_FILES = [
