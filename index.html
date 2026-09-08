@@ -179,22 +179,20 @@
     opacity: .85; pointer-events: none;
   }
   .header-inner {
-    display: grid;
-    grid-template-columns: auto auto 1fr auto auto auto;
-    grid-template-areas:
-      "bm ttl ttl sd cd dr"
-      "bm hos hos hos hos hos";
-    column-gap: 16px; row-gap: 8px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
   }
   .header-brandmark {
-    grid-area: bm; width: 56px; height: 56px; border-radius: 16px;
+    flex: none; width: 56px; height: 56px; border-radius: 16px;
     display: flex; align-items: center; justify-content: center;
     background: linear-gradient(145deg,#1a7fa8,#0D3334);
     box-shadow: inset 0 2px 3px rgba(255,255,255,.3), 0 8px 20px -6px rgba(0,0,0,.5);
     border: 1px solid rgba(232,206,122,.35);
   }
   .header-brandmark img { width: 44px; height: 44px; object-fit: cover; border-radius: 12px; }
-  .header-titles { grid-area: ttl; min-width: 0; align-self: center; }
+  .header-titles { flex: 1 1 0; min-width: 0; align-self: center; }
   .header-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
   .header-title-ar {
     font-family: 'Cairo', sans-serif;
@@ -208,15 +206,14 @@
   }
   body.is-owner .owner-crown { display: inline-flex; }
   .header-hospital {
-    grid-area: hos; display: inline-flex; align-items: center; gap: 7px;
-    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0; align-self: end;
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px;
+    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0;
   }
+  .header-hospital::before { content: '🏥'; font-size: 13px; }
   .header-side {
-    grid-area: sd; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    align-self: start;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    margin-inline-start: auto;
   }
-  .conn-chip { grid-area: cd; }
-  .drawer-toggle { grid-area: dr; }
   .header-date-chip {
     background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16);
     padding: 6px 14px; border-radius: 999px; font-size: 12.5px; color: #EAF6F4; white-space: nowrap;
@@ -239,7 +236,7 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .conn-chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #d0dce8; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #1a2535; white-space: nowrap; }
+  .conn-chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #d0dce8; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #1a2535; white-space: nowrap; margin-inline-start: auto; }
   .conn-chip .conn-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
   .conn-chip.on .conn-dot { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
   .conn-chip.off .conn-dot { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
