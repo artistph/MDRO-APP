@@ -744,12 +744,12 @@ header { padding: 17px 14px; }
     .drawer-toggle { grid-area: dr; width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; }
     .drawer-toggle span { width: 15px; height: 2px; }
     .header-side {
-      grid-area: sd; justify-self: start; display: grid; grid-template-columns: max-content 1fr;
-      align-items: center; column-gap: 10px; margin-inline-start: 0;
+      grid-area: sd; justify-self: start; display: flex; flex-direction: column;
+      align-items: stretch; gap: 6px; margin-inline-start: 0;
     }
-    .header-date-chip { padding: 4px 12px; font-size: 11.5px; justify-self: start; }
+    .header-date-chip { padding: 4px 12px; font-size: 11.5px; align-self: flex-start; }
     .header-credit {
-      display: block !important; justify-self: end; text-align: left !important;
+      display: block !important; text-align: left !important;
       font-size: 9.5px; line-height: 1.5; margin-top: 0; min-width: 0;
       transform: translateY(4px);
     }
