@@ -559,6 +559,7 @@
   .role-badge.owner { background: rgba(231,185,61,.10); color: #F2D98C; box-shadow: inset 0 0 0 1.5px rgba(240,201,94,.85); }
   .role-badge.editor { background: rgba(59,201,184,.16); color: #8FE8DF; box-shadow: inset 0 0 0 1px rgba(59,201,184,.45); }
   .role-badge.viewer { background: rgba(148,163,184,.14); color: #A8B3C5; box-shadow: inset 0 0 0 1px rgba(148,163,184,.35); }
+  .role-badge.pending { background: rgba(241,196,15,.12); color: #E6C46B; box-shadow: inset 0 0 0 1px rgba(241,196,15,.45); }
 
   .users-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
   .users-toolbar b { font-size: 14.5px; color: var(--text,#1a2535); }
@@ -1132,6 +1133,8 @@ window.MDRo_Sync_stop = window.MDRo_Sync_stop || function(){};
           var ls = document.getElementById('loginScreen');
           var st = localStorage.getItem('mdro_session');
           if (ls && st) { ls.style.display = 'none'; }
+          // طبق الدور الحقيقي فور عودته حتى لا تظهر واجهة "المعاينة" مؤقتاً
+          if (typeof applyRoleUI === 'function') applyRoleUI();
         }
       });
     }
@@ -8667,9 +8670,15 @@ async function checkDeviceAccess() {
     if (!fdb) throw new Error('Firestore not ready');
     const ref = doc(fdb, 'devices', deviceId);
     const snap = await getDoc(ref);
+    // المصدر المحلي الصالح (جلسة/دور محفوظ) هو الافتراضي — لا نسمح لقراءة
+    // devices القديمة بإسقاط الدور المحفوظ مهما كانت النتيجة.
+    const savedLocal = localStorage.getItem('mdro_device_role');
+    const localValid = savedLocal === 'owner' || savedLocal === 'editor' || savedLocal === 'viewer';
     if (snap.exists()) {
       const data = snap.data();
-      _currentRole = data.role || 'pending';
+      const fresh = data.role || 'pending';
+      // دور الجهاز القديم قد يكون 'pending' لجهاز ما يزال صاحب صلاحية — نبقى عليه
+      _currentRole = (fresh === 'pending' && localValid) ? savedLocal : fresh;
       setDoc(ref, { ...data, lastSeen: Date.now() }, { merge: true }).catch(() => {});
     } else {
       await setDoc(ref, {
@@ -8678,7 +8687,7 @@ async function checkDeviceAccess() {
         createdAt: Date.now(),
         lastSeen: Date.now()
       });
-      _currentRole = 'pending';
+      _currentRole = localValid ? savedLocal : 'pending';
     }
     // حفظ الدور محلياً للاستخدام أوفلاين
     localStorage.setItem('mdro_device_role', _currentRole);
@@ -8802,7 +8811,7 @@ function renderDrawerUser() {
     if (typeof _currentRole === 'string' && (_currentRole === 'owner' || _currentRole === 'editor' || _currentRole === 'viewer')) {
       role = _currentRole;
     } else {
-      role = 'viewer';
+      role = 'pending';
     }
   }
   const isOwnerUser = (role === 'owner');
@@ -8818,9 +8827,10 @@ function renderDrawerUser() {
     const rmap = {
       owner:  { cls: 'owner',  ico: '👑', label: 'نسخة المالك' },
       editor: { cls: 'editor', ico: '✏️', label: 'محرر' },
-      viewer: { cls: 'viewer', ico: '👁', label: 'معاينة' }
+      viewer: { cls: 'viewer', ico: '👁', label: 'معاينة' },
+      pending: { cls: 'pending', ico: '⏳', label: 'قيد الانتظار' }
     };
-    const m = rmap[role] || rmap.viewer;
+    const m = rmap[role] ? rmap[role] : rmap.pending;
     const esc = (typeof escMDRO === 'function') ? escMDRO : function (x) { return x; };
     const badge = '<span class="role-badge ' + m.cls + '"><span class="rb-ico">' + m.ico + '</span>' + m.label + '</span>';
     du.innerHTML = (name || email)
@@ -8845,16 +8855,9 @@ function resetViewerRestrictions() {
     el.style.opacity = '';
     el.style.cursor = '';
   });
-  // إزالة العلامة وإرجاع الـ padding
+  // شارة وضع القراءة فقط لم تعد تُستخدم — لم نعد نعرض علامة "المعاينة"
   const badge = document.getElementById('viewerBanner');
-  if (badge) {
-    const mainEl = document.querySelector('main');
-    if (mainEl) {
-      const currentPadding = parseInt(getComputedStyle(mainEl).paddingTop) || 0;
-      mainEl.style.paddingTop = Math.max(0, currentPadding - 28) + 'px';
-    }
-    badge.remove();
-  }
+  if (badge) badge.remove();
 }
 
 function applyViewerRestrictions() {
@@ -8893,59 +8896,7 @@ function applyViewerRestrictions() {
     el.style.cursor = 'not-allowed';
   });
 
-  // علامة صغيرة تحت شريط القوائم في المنتصف
-  if (!document.getElementById('viewerBanner')) {
-    const nav = document.querySelector('.nav');
-    if (nav) {
-      const badge = document.createElement('div');
-      badge.id = 'viewerBanner';
-      // inline style كامل بدون اعتماد على أي CSS خارجي
-      badge.setAttribute('style',
-        'display:block !important;' +
-        'position:fixed !important;' +
-        'left:0;right:0;' +
-        'text-align:center;' +
-        'padding:4px 0;' +
-        'background-color:#1a3a5c;' +
-        'border-top:2px solid #f1c40f;' +
-        'border-bottom:2px solid #f1c40f;' +
-        'z-index:97;'
-      );
-      badge.innerHTML = [
-        '<span style="',
-        'display:inline-block !important;',
-        'background-color:#f1c40f !important;',
-        'color:#000 !important;',
-        'font-size:12px !important;',
-        'font-weight:900 !important;',
-        'padding:3px 14px !important;',
-        'border-radius:12px !important;',
-        'direction:rtl;',
-        'font-family:Cairo,sans-serif;',
-        'letter-spacing:0.3px;',
-        '">👁️ وضع القراءة فقط</span>'
-      ].join('');
-      nav.insertAdjacentElement('afterend', badge);
-
-      // تثبيت الـ badge تحت الـ nav مباشرة
-      function positionViewerBadge() {
-        const navEl = document.querySelector('.nav');
-        if (!navEl || !badge) return;
-        const navBottom = navEl.getBoundingClientRect().bottom;
-        badge.style.top = navBottom + 'px';
-      }
-      positionViewerBadge();
-      window.addEventListener('resize', positionViewerBadge);
-      setTimeout(positionViewerBadge, 500);
-
-      // إضافة مسافة للـ main عشان المحتوى ميتغطاش
-      const mainEl = document.querySelector('main');
-      if (mainEl) {
-        const currentPadding = parseInt(getComputedStyle(mainEl).paddingTop) || 0;
-        mainEl.style.paddingTop = (currentPadding + 28) + 'px';
-      }
-    }
-  }
+  // لم نعد نعرض شارة "وضع القراءة فقط" أسفل الهيدر — القيود تبقى دون علامة مرئية
 }
 
 // التحقق من Owner Password قبل أي إجراء حساس
