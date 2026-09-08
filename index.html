@@ -178,17 +178,24 @@
     background: linear-gradient(90deg, #E8B84B, transparent 35%, transparent 65%, #E8B84B);
     opacity: .85; pointer-events: none;
   }
-  .header-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header-inner {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto auto;
+    grid-template-areas:
+      "bm ttl ttl sd cd dr"
+      "bm hos hos hos hos hos";
+    column-gap: 16px; row-gap: 8px;
+  }
   .header-brandmark {
-    flex: none; width: 56px; height: 56px; border-radius: 16px;
+    grid-area: bm; width: 56px; height: 56px; border-radius: 16px;
     display: flex; align-items: center; justify-content: center;
     background: linear-gradient(145deg,#1a7fa8,#0D3334);
     box-shadow: inset 0 2px 3px rgba(255,255,255,.3), 0 8px 20px -6px rgba(0,0,0,.5);
     border: 1px solid rgba(232,206,122,.35);
   }
   .header-brandmark img { width: 44px; height: 44px; object-fit: cover; border-radius: 12px; }
-  .header-titles { flex: 1 1 auto; min-width: 0; }
-  .header-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .header-titles { grid-area: ttl; min-width: 0; align-self: center; }
+  .header-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: nowrap; }
   .header-title-ar {
     font-family: 'Cairo', sans-serif;
     font-size: clamp(17px,2.4vw,23px); font-weight: 800; letter-spacing: .2px;
@@ -201,15 +208,15 @@
   }
   body.is-owner .owner-crown { display: inline-flex; }
   .header-hospital {
-    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px;
-    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0;
+    grid-area: hos; display: inline-flex; align-items: center; gap: 7px;
+    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0; align-self: end;
   }
   .header-side {
-    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-    flex: 0 0 auto;
+    grid-area: sd; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    align-self: start;
   }
-  .header-meta { display: contents; }
-  .header-meta .header-hospital { margin-inline-start: 4px; }
+  .conn-chip { grid-area: cd; }
+  .drawer-toggle { grid-area: dr; }
   .header-date-chip {
     background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16);
     padding: 6px 14px; border-radius: 999px; font-size: 12.5px; color: #EAF6F4; white-space: nowrap;
@@ -715,36 +722,34 @@
     .month-grid { grid-template-columns: repeat(3, 1fr); }
     /* ── Header على الهاتف — بنمط الإداريات ── */
 header { padding: 17px 14px; }
-    .header-inner { gap: 10px; }
-    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; order: 1; }
+    .header-inner {
+      grid-template-columns: auto 1fr auto auto;
+      grid-template-areas:
+        "bm ttl ttl ttl"
+        "hos hos cd dr"
+        "sd sd sd sd";
+      column-gap: 10px; row-gap: 4px;
+    }
+    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; }
     .header-brandmark img { width: 36px; height: 36px; border-radius: 10px; }
-    .header-titles { flex: 1 1 60px; min-width: 0; order: 2; }
-    .header-title-row { flex-wrap: nowrap; gap: 5px; }
+    .header-titles { min-width: 0; }
+    .header-title-row { gap: 5px; }
     .header-title-ar { font-size: 13px; }
     .owner-crown { font-size: 13px; }
-    .header-hospital { font-size: 10px; margin-top: 0; }
-    .header-meta {
-      display: flex; align-items: center; gap: 10px; width: 100%; order: 3;
-      margin-inline-start: 0; margin-top: 2px;
-    }
-    .header-meta .header-hospital { flex: 1; min-width: 0; margin-inline-start: 0; }
-    .conn-chip { padding: 4px 9px; font-size: 10.5px; }
+    .header-hospital { font-size: 10px; align-self: center; }
+    .conn-chip { padding: 4px 9px; font-size: 10.5px; justify-self: end; align-self: center; }
     .conn-chip .conn-dot { width: 7px; height: 7px; }
-    .drawer-toggle { width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; flex: none; }
+    .drawer-toggle { width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; }
     .drawer-toggle span { width: 15px; height: 2px; }
     .header-side {
-      width: 100%; display: grid; grid-template-columns: auto 1fr; align-items: center;
-      gap: 10px; margin-inline-start: 0; margin-top: 3px; order: 4;
+      display: grid; grid-template-columns: auto 1fr; align-items: center;
+      column-gap: 10px;
     }
     .header-date-chip { padding: 4px 12px; font-size: 11.5px; justify-self: start; }
     .header-credit {
       display: block !important; justify-self: end; text-align: left !important;
       font-size: 9.5px; line-height: 1.5; margin-top: 0; min-width: 0;
     }
-    .conn-chip { padding: 4px 9px; font-size: 10.5px; transform: translateY(5px); }
-    .conn-chip .conn-dot { width: 7px; height: 7px; }
-    .drawer-toggle { width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; transform: translateY(5px); }
-    .drawer-toggle span { width: 15px; height: 2px; }
   }
 
   /* ─── EXPORT MODAL ─── */
@@ -1440,15 +1445,13 @@ setInterval(async () => {
         <span class="owner-crown" id="headerOwnerCrown" title="المالك">👑</span>
       </div>
     </div>
+    <span class="header-hospital">مستشفى المطرية التعليمي</span>
     <div class="header-side">
       <span class="header-date-chip"><span id="headerDate">—</span></span>
       <div class="header-credit">Developed by <b>Ph Ahmed Elsayed</b><br>MTH Infection Control Specialist</div>
     </div>
-    <div class="header-meta">
-      <span class="header-hospital">مستشفى المطرية التعليمي</span>
-      <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">متصل</span></span>
-      <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
-    </div>
+    <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">متصل</span></span>
+    <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
   </div>
 </header>
 

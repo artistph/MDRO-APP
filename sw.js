@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // â”€â”€ Caching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const CACHE_VERSION = 'mdro-v146';
+const CACHE_VERSION = 'mdro-v147';
 const CACHE = CACHE_VERSION;
 
 const CORE_FILES = [
