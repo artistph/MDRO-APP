@@ -19,20 +19,31 @@ service cloud.firestore {
     function ownerCodeDoc() { return /databases/$(database)/documents/bootstrap/owner-code; }
 
     // ===== بيانات تطبيق MDRO (البيانات الطبية) =====
-    // تُكتب عادةً عبر الصلاحيات متعددة المستخدمين، لكن نحتفظ بالسماح لأي جلسة
-    // (بما فيها الجلسات القديمة المستخدمة في المزامنة) لضمان عدم كسر النظام الحالي.
+    // القراءة لكل مستخدم مسجّل الدخول (الـ viewer يُشاهد التقارير فقط)،
+    // والكتابة للمالك والمحرّر فقط عبر canWrite — حماية احترافية للبيانات.
     match /mdro_data/{doc} {
-      allow read, write: if request.auth != null;
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
+
+    // ===== أجهزة الدخول والإشعارات (تسجيل جهاز جديد + FCM) =====
+    // تُترك لكل جلسة مسجّلة لضمان عمل تسجيل الأجهزة وإشعارات الدفع.
     match /devices/{deviceId} {
       allow read, write: if request.auth != null;
     }
+
+    // ===== الإعدادات (قراءة فقط من العملاء) =====
     match /mdro_config/{doc} {
       allow read: if request.auth != null;
       allow write: if false;
     }
+
+    // ===== بيانات المعمل (LDM) =====
+    // تُكتب من جسر المعمل عبر حساب الخدمة (يتجاوز القواعد)؛ العميل يقرأ فقط،
+    // وأي كتابة من التطبيق محصورة في المالك والمحرّر.
     match /ldmCultures/{doc} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if canWrite();
     }
 
     // ===== طلب/تفعيل المالك (bootstrap) =====
