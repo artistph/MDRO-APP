@@ -9060,6 +9060,16 @@ function doLogout() {
 async function checkSession() {
   // النظام الجديد: استعادة الجلسة عبر MDROAuth (Firebase Auth + كاش محلي)
   if (window.MDROAuth) {
+    // عند الريفريش تُستعاد جلسة Firebase بشكل غير متزامن (IndexedDB/شبكة).
+    // ننتظرها حتى تستقر أولاً حتى لا يُقرأ دور محفوظ قديم (مثل viewer من الأنظمة
+    // السابقة) لحظياً ويُطبَّق بالخطأ قبل وصول الدور الحقيقي.
+    if (navigator.onLine !== false && window.MDROAuth.get) {
+      for (let i = 0; i < 8; i++) {
+        const probe = window.MDROAuth.get();
+        if (probe && probe.uid) break;
+        await new Promise(r => setTimeout(r, 150));
+      }
+    }
     const me = window.MDROAuth.get();
     if (me && me.uid) {
       // جلسة نشطة
@@ -9079,8 +9089,10 @@ async function checkSession() {
     }
     // لا حساب Firebase — مجرد دخول بكود المالك أو جلسة محلية صالحة:
     // الدور المحفوظ هو المصدر، نستعيد الجلسة دون فحص أجهزة (فحص firestore مرفوض بدون auth).
-    const savedRole = localStorage.getItem('mdro_device_role');
     const savedSession = localStorage.getItem('mdro_session');
+    // آخر حساب سجّل فعلياً على الجهاز هو الأدق — يُحدَّث فقط عبر جلسة حقيقية
+    const lu = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
+    const savedRole = (lu && lu.role) ? lu.role : (localStorage.getItem('mdro_device_role') || '');
     const sessionActive = localStorage.getItem('mdro_session_active');
     if (savedSession && savedRole && savedRole !== 'pending' && savedRole !== 'blocked') {
       _currentRole = savedRole;

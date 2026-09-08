@@ -416,7 +416,8 @@ window.MDROAuth = (function () {
           try { disp = sessionStorage.getItem('mdro_display_email') || disp; } catch {}
           fetchUser(user.uid).then(d => {
             const cached = cachedSession();
-            const role = (d && d.role) || (cached && cached.uid === user.uid && (cached.role || 'viewer')) || 'viewer';
+            // لا نلمح بالـ viewer عند فشل قراءة المستند — نرجع لأدق معلومة محفوظة
+            const role = (d && d.role) || (cached && cached.uid === user.uid && cached.role) || 'viewer';
             const name = (d && d.name) || (cached && cached.uid === user.uid && cached.name) || disp.split('@')[0];
             currentUser = { uid: user.uid, email: disp, name, role };
             cacheSession(currentUser);
