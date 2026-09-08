@@ -1323,10 +1323,15 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && db && isOnline) schedulePull(300);
 });
 
-// تحقق دوري من صلاحيات الجهاز كل 5 دقائق
+// تحقق دوري من صلاحيات الجهاز كل 5 دقائق (نظام الأجهزة القديم فقط)
 setInterval(async () => {
   const session = localStorage.getItem('mdro_session');
   if (!session || !isOnline) return;
+  // النظام الجديد (Firebase Accounts): الأدوار من حساب المستخدم — لا فحص أجهزة.
+  if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
+  // دخول بكود المالك أو جلسة محلية صالحة: الدور المحفوظ هو المصدر ولا يُسقط تلقائياً.
+  const savedRole = localStorage.getItem('mdro_device_role');
+  if (savedRole && savedRole !== 'pending' && savedRole !== 'blocked') return;
   const role = await checkDeviceAccess();
   if (role === 'blocked' || role === 'pending') {
     doLogout();
@@ -9023,6 +9028,24 @@ async function checkSession() {
       if (lastTab && lastTab !== 'home' && sessionActive) {
         switchTab(lastTab);
       }
+      localStorage.setItem('mdro_session_active', '1');
+      updateSyncBadge();
+      return;
+    }
+    // لا حساب Firebase — مجرد دخول بكود المالك أو جلسة محلية صالحة:
+    // الدور المحفوظ هو المصدر، نستعيد الجلسة دون فحص أجهزة (فحص firestore مرفوض بدون auth).
+    const savedRole = localStorage.getItem('mdro_device_role');
+    const savedSession = localStorage.getItem('mdro_session');
+    const sessionActive = localStorage.getItem('mdro_session_active');
+    if (savedSession && savedRole && savedRole !== 'pending' && savedRole !== 'blocked') {
+      _currentRole = savedRole;
+      document.getElementById('loginScreen').style.display = 'none';
+      applyRoleUI();
+      initNotifications();
+      flushSyncQueue();
+      localStorage.setItem('mdro_session', Date.now());
+      const lt = localStorage.getItem('mdro_last_tab');
+      if (lt && lt !== 'home' && sessionActive) switchTab(lt);
       localStorage.setItem('mdro_session_active', '1');
       updateSyncBadge();
       return;
