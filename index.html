@@ -8800,15 +8800,26 @@ function renderDrawerUser() {
   if (window.MDROAuth && window.MDROAuth.get) {
     const me = window.MDROAuth.get() || {};
     if (me && me.uid) {
-      name = me.name || ''; email = me.email || ''; role = me.role || ''; gotUser = true;
+      name = me.name || ''; email = me.email || ''; gotUser = true;
+      const mr = me.role || '';
+      // لا نقبل دوراً غير مكتمل من الجلسة (viewer وهمي/فارغ أثناء fetchUser):
+      // الدور الحاكم الفعلي هو _currentRole — نعرضه حتى لا يأتي البادج مخالفاً للواجهة.
+      if (mr === 'owner' || mr === 'editor' || mr === 'viewer') {
+        role = mr;
+      } else if (_currentRole === 'owner' || _currentRole === 'editor' || _currentRole === 'viewer') {
+        role = _currentRole;
+      } else {
+        const last = mdroGetLastUser();
+        role = (last && (last.role === 'owner' || last.role === 'editor' || last.role === 'viewer')) ? last.role : 'pending';
+      }
     }
   }
   if (!gotUser) {
     const last = mdroGetLastUser();
     if (last) { name = last.name || ''; email = last.email || ''; role = last.role || ''; gotUser = true; }
   }
-  if (!role) {
-    if (typeof _currentRole === 'string' && (_currentRole === 'owner' || _currentRole === 'editor' || _currentRole === 'viewer')) {
+  if (!(role === 'owner' || role === 'editor' || role === 'viewer')) {
+    if (_currentRole === 'owner' || _currentRole === 'editor' || _currentRole === 'viewer') {
       role = _currentRole;
     } else {
       role = 'pending';
@@ -9072,7 +9083,17 @@ async function checkSession() {
     }
     const me = window.MDROAuth.get();
     if (me && me.uid) {
-      // جلسة نشطة
+      // جلسة نشطة — ثبّت الدور من أدق مصدر قبل رسم الواجهة
+      // حتى لا يظهر بادج "معاينة" مؤقتة بينما الأزرار مفتوحة.
+      let activeRole = me.role || '';
+      if (!(activeRole === 'owner' || activeRole === 'editor' || activeRole === 'viewer')) {
+        const ru = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
+        if (ru && (ru.role === 'owner' || ru.role === 'editor' || ru.role === 'viewer')) activeRole = ru.role;
+      }
+      if (activeRole) {
+        _currentRole = activeRole;
+        try { localStorage.setItem('mdro_device_role', activeRole); } catch {}
+      }
       localStorage.setItem('mdro_session', Date.now());
       document.getElementById('loginScreen').style.display = 'none';
       applyRoleUI();
