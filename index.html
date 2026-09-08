@@ -158,41 +158,70 @@
     font-size: 14px;
   }
 
-  /* ─── HEADER ─── */
+  /* ─── HEADER — بنمط تطبيق الإداريات ─── */
   header {
     background: var(--primary);
     color: #fff;
-    padding: 14px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    padding: 16px clamp(14px,3vw,30px);
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 100;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
+    overflow: hidden;
   }
-  header h1 {
-    font-size: 15px; font-weight: 700; line-height: 1.35;
-    display: flex; align-items: center; gap: 6px; min-width: 0;
+  /* الفاصل الاحترافي الذهبي أسفل الهيدر العلوي (مثل الإداريات) */
+  header::after {
+    content: '';
+    position: absolute; inset: auto 0 0 0; height: 3px;
+    background: linear-gradient(90deg, #E8B84B, transparent 35%, transparent 65%, #E8B84B);
+    opacity: .85; pointer-events: none;
   }
-  header > div:first-child { min-width: 0; flex: 1 1 auto; }
-  header > div:last-child { flex: 0 0 auto; }
-  header h1 .head-title {
-    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  .header-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .header-brandmark {
+    flex: none; width: 56px; height: 56px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg,#1a7fa8,#0D3334);
+    box-shadow: inset 0 2px 3px rgba(255,255,255,.3), 0 8px 20px -6px rgba(0,0,0,.5);
+    border: 1px solid rgba(232,206,122,.35);
   }
-  header h1 .head-crown { flex: 0 0 auto; }
-  header h1 .app-logo-mini { flex: 0 0 auto; vertical-align: middle; margin-inline-end: 0; }
-  .app-logo-mini {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; border-radius: 9px;
-    background: linear-gradient(145deg,#1a7fa8,#0d3334);
-    border: 1px solid rgba(232,206,122,.3);
-    vertical-align: -6px; margin-inline-end: 4px; flex: none;
+  .header-brandmark img { width: 44px; height: 44px; object-fit: cover; border-radius: 12px; }
+  .header-titles { flex: 1 1 220px; min-width: 0; }
+  .header-title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+  .header-title-ar {
+    font-family: 'Cairo', sans-serif;
+    font-size: clamp(17px,2.4vw,23px); font-weight: 800; letter-spacing: .2px;
+    color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .app-logo-mini img { width: 24px; height: 24px; object-fit: cover; border-radius: 6px; }
-  header small { font-size: 11px; opacity: .7; display: block; }
+  .owner-crown {
+    display: none; align-items: center; justify-content: center;
+    flex: none; line-height: 1; font-size: 17px;
+    filter: drop-shadow(0 2px 6px rgba(231,185,61,.55));
+  }
+  body.is-owner .owner-crown { display: inline-flex; }
+  .header-hospital {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px;
+    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0;
+  }
+  .header-side {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    margin-inline-start: auto; flex: 0 0 auto;
+  }
+  .header-date-chip {
+    background: rgba(255,255,255,.09); border: 1px solid rgba(255,255,255,.16);
+    padding: 6px 14px; border-radius: 999px; font-size: 12.5px; color: #EAF6F4; white-space: nowrap;
+  }
+  .header-date-chip #headerDate { font-weight: 700; }
+  .header-credit { font-size: 10.5px; color: #BFDAD6; line-height: 1.5; text-align: start; }
+  .header-credit b { color: #F2D98C; font-weight: 700; }
+  .header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+  .drawer-toggle {
+    flex: none; width: 42px; height: 42px; border-radius: 12px; border: 1.5px solid #d0dce8;
+    background: #fff; display: flex; flex-direction: column; justify-content: center;
+    gap: 4.5px; align-items: center; cursor: pointer;
+  }
+  .drawer-toggle span { display: block; width: 18px; height: 2px; background: #1a2535; border-radius: 2px; }
   .offline-badge {
     background: var(--success);
     color: #fff;
@@ -202,10 +231,12 @@
     font-weight: 600;
     white-space: nowrap;
   }
-  .conn-chip { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; background: rgba(255,255,255,.14); border: 1.5px solid rgba(255,255,255,.28); color: #fff; }
+  .conn-chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #d0dce8; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #1a2535; white-space: nowrap; }
   .conn-chip .conn-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
   .conn-chip.on .conn-dot { background: #22C55E; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
   .conn-chip.off .conn-dot { background: #EF4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
+  .conn-chip.on { color: #0f7a5a; }
+  .conn-chip.off { color: #b45309; }
 
   /* ─── NAV TABS ─── */
   .nav {
@@ -681,11 +712,26 @@
     .form-grid.cols-3 { grid-template-columns: 1fr 1fr; }
     .results-grid { grid-template-columns: 1fr 1fr; }
     .month-grid { grid-template-columns: repeat(3, 1fr); }
-    header h1 { font-size: 12.5px; }
-    header small { font-size: 10px; }
-    header { padding: 10px 12px; }
-    .header-credit { font-size: 7.5px; padding: 2px 7px; }
+    /* ── Header على الهاتف — بنمط الإداريات ── */
+    header { padding: 12px 14px; }
+    .header-inner { gap: 11px; }
+    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; }
+    .header-brandmark img { width: 36px; height: 36px; border-radius: 10px; }
+    .header-titles { flex: 1 1 100px; min-width: 0; }
+    .header-title-ar { font-size: 17px; }
+    .header-hospital { font-size: 12px; }
+    .header-side {
+      width: 100%; display: grid; grid-template-columns: auto 1fr; align-items: center;
+      gap: 10px; margin-inline-start: 0; margin-top: 3px;
+    }
+    .header-date-chip { padding: 4px 12px; font-size: 11.5px; justify-self: start; }
+    .header-credit {
+      display: block !important; justify-self: end; text-align: left !important;
+      font-size: 9.5px; line-height: 1.5; margin-top: 0; min-width: 0;
+    }
+    .header-actions { margin-inline-start: auto; }
     .conn-chip { padding: 6px 10px; font-size: 11px; }
+    .drawer-toggle { width: 38px; height: 38px; }
   }
 
   /* ─── EXPORT MODAL ─── */
@@ -954,30 +1000,7 @@
     margin-top: 3px; letter-spacing: 1px;
   }
 
-  /* ─── HEADER CREDIT (تاج بجانب العنوان) ─── */
-  .header-credit {
-    font-size: 8.5px; opacity: .55; letter-spacing: 0.3px; color: #fff;
-    display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
-    background: rgba(255,255,255,0.10);
-    border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
-  }
-  .header-credit .credit-name {
-    color: #f2d98c;
-    background: linear-gradient(135deg, #fbe79a, #e8b84b, #d9a233, #fbe79a);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: 800;
-    animation: creditShine 2.5s linear infinite;
-  }
-  @keyframes creditShine {
-    0% { background-position: 0% 50%; }
-    100% { background-position: 200% 50%; }
-  }
-
-  /* ─── CHANGE PASSWORD MODAL ─── */
+/* ─── CHANGE PASSWORD MODAL ─── */
   #changePwdOverlay { display: none; }
   #changePwdOverlay.open { display: flex !important; }
 
@@ -1396,18 +1419,23 @@ setInterval(async () => {
 <body>
 
 <header>
-  <div>
-    <h1><span class="app-logo-mini"><img src="logo.png" alt=""></span><span class="head-title">ترصد الميكروبات المقاومة</span><span id="headerOwnerCrown" class="head-crown" style="display:none;font-size:14px" title="المالك">👑</span><span class="header-credit">Developed by <b class="credit-name">Ph. Ahmed Elsayed</b></span></h1>
-    <small>مستشفى المطرية التعليمي &nbsp;|&nbsp; <span id="headerDate" style="color:#e8b84b;font-weight:700"></span></small>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">أونلاين</span></span>
-    <button onclick="openChangePwd()" title="القائمة"
-      style="background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;border-radius:8px;padding:6px 10px;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;width:36px;height:36px">
-      <span style="display:block;width:18px;height:2px;background:#fff;border-radius:2px"></span>
-      <span style="display:block;width:18px;height:2px;background:#fff;border-radius:2px"></span>
-      <span style="display:block;width:18px;height:2px;background:#fff;border-radius:2px"></span>
-    </button>
+  <div class="header-inner">
+    <div class="header-brandmark"><img src="logo.png" alt=""></div>
+    <div class="header-titles">
+      <div class="header-title-row">
+        <span class="header-title-ar">ترصد الميكروبات المقاومة</span>
+        <span class="owner-crown" id="headerOwnerCrown" title="المالك">👑</span>
+      </div>
+      <span class="header-hospital">مستشفى المطرية التعليمي</span>
+    </div>
+    <div class="header-actions">
+      <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">أونلاين</span></span>
+      <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
+    </div>
+    <div class="header-side">
+      <span class="header-date-chip"><span id="headerDate">—</span></span>
+      <div class="header-credit">Developed by <b>Ph Ahmed Elsayed</b><br>MTH Infection Control Specialist</div>
+    </div>
   </div>
 </header>
 
@@ -8781,7 +8809,8 @@ function renderDrawerUser() {
       : badge;
   }
   const hc = document.getElementById('headerOwnerCrown');
-  if (hc) hc.style.display = isOwnerUser ? 'inline' : 'none';
+  document.body.classList.toggle('is-owner', !!isOwnerUser);
+  if (hc) hc.style.display = '';
 }
 
 function resetViewerRestrictions() {
