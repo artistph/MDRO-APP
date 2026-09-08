@@ -173,7 +173,17 @@
     z-index: 100;
     box-shadow: 0 3px 12px rgba(0,0,0,0.25);
   }
-  header h1 { font-size: 15px; font-weight: 700; line-height: 1.4; }
+  header h1 {
+    font-size: 15px; font-weight: 700; line-height: 1.35;
+    display: flex; align-items: center; gap: 6px; min-width: 0;
+  }
+  header > div:first-child { min-width: 0; flex: 1 1 auto; }
+  header > div:last-child { flex: 0 0 auto; }
+  header h1 .head-title {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  header h1 .head-crown { flex: 0 0 auto; }
+  header h1 .app-logo-mini { flex: 0 0 auto; vertical-align: middle; margin-inline-end: 0; }
   .app-logo-mini {
     display: inline-flex; align-items: center; justify-content: center;
     width: 30px; height: 30px; border-radius: 9px;
@@ -430,39 +440,59 @@
     margin-top: 14px;
   }
 
-  /* ─── إدارة المستخدمين (user-manager.js) ─── */
+  /* ─── إدارة المستخدمين (user-manager.js) — بنمط الإداريات بالظبط ─── */
   .settings-panel {
     background: var(--card,#fff);
-    border: 1.5px solid var(--border,#d0dce8);
-    border-radius: 12px;
-    padding: 16px;
-    margin: 12px 0;
+    border: 1px solid var(--border,#d0dce8);
+    border-radius: 18px;
+    padding: 22px clamp(14px,2.5vw,26px);
+    box-shadow: 0 2px 10px rgba(15,42,74,.06);
+    margin-bottom: 16px;
   }
-  .settings-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
-  .settings-field label { font-size: 12px; font-weight: 700; color: var(--text2,#6b7f96); }
+  .settings-panel h3 {
+    font-size: 15.5px; color: var(--text,#1a2535); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 9px;
+  }
+  .settings-panel h3::before {
+    content: ''; width: 5px; height: 19px; border-radius: 99px; flex: none;
+    background: linear-gradient(#C9A227,#1B7A78);
+  }
+  .settings-field { margin-bottom: 13px; }
+  .settings-field label {
+    display: block; font-size: 12px; font-weight: 700;
+    color: var(--text2,#6b7f96); margin-bottom: 5px;
+  }
   .settings-field input,
   .settings-field select,
   .settings-field textarea {
-    width: 100%;
-    padding: 9px 12px;
-    border: 1.5px solid var(--input-border,#d0dce8);
-    border-radius: 8px;
-    font-family: inherit;
-    font-size: 13px;
-    background: var(--input-bg,#fff);
-    color: var(--text,#1a2535);
+    width: 100%; max-width: 380px; padding: 10.5px 14px; border-radius: 12px;
+    border: 1.5px solid var(--input-border,#d0dce8); background: var(--input-bg,#fff);
+    font-size: 14px; font-family: inherit; color: var(--text,#1a2535); outline: none;
     box-sizing: border-box;
   }
-  .settings-msg { min-height: 16px; font-size: 12px; font-weight: 600; margin: 6px 0 0; }
-  .settings-msg.ok { color: #1b7a48; }
-  .settings-msg.err { color: #c0392b; }
-  .owner-profile { border: 1.5px solid var(--border,#d0dce8); border-radius: 12px; padding: 4px 14px; }
-  .owner-row { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--border,#f0f4f8); }
+  .settings-field input:focus,
+  .settings-field select:focus { border-color: var(--accent,#1a7fa8); }
+  .settings-msg { display: none; margin-top: 11px; padding: 9px 13px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+  .settings-msg.ok { display: block; background: #e3f4ea; color: #1b7a48; }
+  .settings-msg.err { display: block; background: #fdecea; color: #c0392b; }
+  .owner-profile {
+    border: 1.5px dashed rgba(201,162,39,.55); border-radius: 16px; padding: 14px 16px;
+    background: linear-gradient(180deg, rgba(201,162,39,.06), rgba(255,255,255,0));
+    margin: 6px 0 4px;
+  }
+  .owner-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border,#e8eef4); }
   .owner-row:last-child { border-bottom: none; }
-  .owner-row .or-label { font-size: 11px; color: var(--text2,#6b7f96); width: 74px; flex-shrink: 0; }
-  .owner-row .or-value { font-size: 13px; font-weight: 700; color: var(--text,#1a2535); flex: 1; direction: ltr; text-align: right; }
-  .owner-row .or-value.muted { color: var(--text2,#9aa8b8); }
-  .owner-row.stack { flex-wrap: wrap; }
+  .owner-row .or-label { flex: 0 0 110px; font-size: 12.5px; color: var(--text2,#6b7f96); font-weight: 700; }
+  .owner-row .or-value { flex: 1 1 auto; font-size: 13.5px; color: var(--text,#1a2535); font-weight: 600; word-break: break-all; }
+  .owner-row .or-value.muted { color: var(--text2,#9aa8b8); letter-spacing: 2px; }
+  .owner-row.stack { position: relative; flex-direction: column; align-items: stretch; }
+  .owner-row.stack .or-label { flex: none; padding-bottom: 2px; }
+  .owner-row.stack .or-value { flex: none; width: 100%; line-height: 1.55; word-break: break-word; overflow-wrap: anywhere; }
+  .owner-row.stack .btn { position: absolute; top: 6px; left: 0; margin: 0; }
+  .owner-edit-box {
+    margin-top: 12px; padding: 14px; border-radius: 14px;
+    background: var(--input-bg,#f4f7fb); border: 1px solid var(--border,#d0dce8);
+  }
 
   /* ─── هيدر السايد بار (بنمط تطبيق الإداريات) ─── */
   .drawer-head { background: var(--primary,#0f2a4a); padding: 13px 16px 12px; border-bottom: 1px solid rgba(255,255,255,.1); flex-shrink: 0; }
@@ -491,26 +521,41 @@
   .role-badge.editor { background: rgba(59,201,184,.16); color: #8FE8DF; box-shadow: inset 0 0 0 1px rgba(59,201,184,.45); }
   .role-badge.viewer { background: rgba(148,163,184,.14); color: #A8B3C5; box-shadow: inset 0 0 0 1px rgba(148,163,184,.35); }
 
-  .users-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; }
-  .users-toolbar b { font-size: 14px; color: var(--text,#1a2535); }
+  .users-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .users-toolbar b { font-size: 14.5px; color: var(--text,#1a2535); }
   .user-card {
-    background: var(--card,#fff);
-    border: 1.5px solid var(--border,#d0dce8);
-    border-radius: 12px;
-    padding: 14px;
-    cursor: pointer;
-    transition: transform .12s, box-shadow .12s;
+    border: 1px solid var(--border,#d0dce8); border-radius: 16px; background: var(--card,#fff);
+    padding: 14px; display: flex; flex-direction: column; gap: 8px;
+    box-shadow: 0 2px 10px rgba(15,42,74,.06); cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
   }
-  .user-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
-  .uc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .user-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.09); }
+  .uc-top { display: flex; align-items: center; justify-content: space-between; }
   .uc-avatar {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: linear-gradient(135deg,#0f2a4a,#1a7fa8);
-    color: #fff; display: flex; align-items: center; justify-content: center;
-    font-size: 18px; font-weight: 800;
+    width: 44px; height: 44px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg,#0f2a4a,#1a7fa8); color: #fff;
+    font-size: 19px; font-weight: 800;
   }
-  .uc-name { font-size: 13px; font-weight: 700; color: var(--text,#1a2535); margin-bottom: 2px; }
-  .uc-email { font-size: 11px; color: var(--text2,#6b7f96); direction: ltr; text-align: right; word-break: break-all; }
+  .uc-name { font-size: 14.5px; font-weight: 800; color: var(--text,#1a2535); }
+  .uc-email { font-size: 12.5px; color: var(--text2,#6b7f96); word-break: break-all; }
+  .uc-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .uc-actions .btn { flex: 1 1 0; text-align: center; }
+
+  /* ─── عن التطبيق (رمز QR) — بنمط الإداريات ─── */
+  .about-qr { display: flex; align-items: center; gap: 18px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border,#d0dce8); }
+  .about-qr .qr-frame { flex: 0 0 auto; background: #fff; border: 1px solid var(--border,#d0dce8); border-radius: 14px; padding: 10px; }
+  .about-qr-text { flex: 1 1 auto; min-width: 0; }
+  .about-qr-text b { color: var(--text,#1a2535); font-size: 14px; }
+  .about-qr-text p { font-size: 12.5px; color: var(--text2,#6b7f96); line-height: 1.6; margin: 5px 0 8px; }
+  .about-qr-text .about-url {
+    display: inline-block; font-size: 11.5px; font-weight: 700; color: var(--accent,#1a7fa8);
+    background: #e8f4fd; padding: 4px 10px; border-radius: 8px; direction: ltr; word-break: break-all;
+  }
+  @media(max-width: 640px) {
+    .about-qr { flex-direction: column; align-items: center; text-align: center; }
+    .about-qr-text { text-align: center; }
+  }
 
 
   /* ─── TABLES ─── */
@@ -636,7 +681,11 @@
     .form-grid.cols-3 { grid-template-columns: 1fr 1fr; }
     .results-grid { grid-template-columns: 1fr 1fr; }
     .month-grid { grid-template-columns: repeat(3, 1fr); }
-    header h1 { font-size: 13px; }
+    header h1 { font-size: 12.5px; }
+    header small { font-size: 10px; }
+    header { padding: 10px 12px; }
+    .header-credit { font-size: 7.5px; padding: 2px 7px; }
+    .conn-chip { padding: 6px 10px; font-size: 11px; }
   }
 
   /* ─── EXPORT MODAL ─── */
@@ -905,12 +954,13 @@
     margin-top: 3px; letter-spacing: 1px;
   }
 
-  /* ─── HEADER CREDIT ─── */
+  /* ─── HEADER CREDIT (تاج بجانب العنوان) ─── */
   .header-credit {
-    font-size: 9px; opacity: .45;
-    text-align: center; letter-spacing: 0.3px;
-    margin-top: 1px; display: block;
-    color: #fff;
+    font-size: 8.5px; opacity: .55; letter-spacing: 0.3px; color: #fff;
+    display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 999px; padding: 2px 9px; white-space: nowrap;
   }
   .header-credit .credit-name {
     color: #f2d98c;
@@ -1347,9 +1397,8 @@ setInterval(async () => {
 
 <header>
   <div>
-    <h1><span class="app-logo-mini"><img src="logo.png" alt=""></span> ترصد الميكروبات المقاومة <span id="headerOwnerCrown" style="display:none;font-size:15px;vertical-align:middle" title="المالك">👑</span></h1>
+    <h1><span class="app-logo-mini"><img src="logo.png" alt=""></span><span class="head-title">ترصد الميكروبات المقاومة</span><span id="headerOwnerCrown" class="head-crown" style="display:none;font-size:14px" title="المالك">👑</span><span class="header-credit">Developed by <b class="credit-name">Ph. Ahmed Elsayed</b></span></h1>
     <small>مستشفى المطرية التعليمي &nbsp;|&nbsp; <span id="headerDate" style="color:#e8b84b;font-weight:700"></span></small>
-    <span class="header-credit">Developed by <b class="credit-name">Ph. Ahmed Elsayed</b> · MTH Infection Control Specialist</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">أونلاين</span></span>
@@ -2040,10 +2089,7 @@ setInterval(async () => {
 
 <!-- ═══════════════ SETTINGS TAB (الإعدادات) ═══════════════ -->
 <div id="tab-settings" class="tab-content">
-  <div class="card">
-    <div class="card-title"><span class="icon">⚙️</span> الإعدادات</div>
-    <div id="mdroSettingsRender"></div>
-  </div>
+  <div id="mdroSettingsRender" style="padding:6px 0 60px"></div>
 </div>
 
 </main>
@@ -9263,18 +9309,18 @@ function renderSettingsPage() {
   if (!wrap) return;
   wrap.innerHTML =
     '<div class="settings-panel" id="mdroUserManagerWrap"></div>' +
-    '<div class="settings-panel" style="margin-top:14px">' +
+    '<div class="settings-panel" style="margin-bottom:0">' +
       '<h3>عن التطبيق</h3>' +
       '<p style="font-size:13px;color:var(--text2,#6b7f96);line-height:1.9;margin:6px 0 0">' +
         'نظام رصد الميكروبات المقاومة (MDRO) — مستشفى المطرية التعليمي.<br>' +
         'By <b style="color:#C9A227">Ph Ahmed Elsayed</b> — MTH Infection Control Specialist' +
       '</p>' +
-      '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:14px">' +
-        '<img id="settingsAboutQr" alt="رمز QR لتثبيت التطبيق" width="140" height="140" style="width:140px;height:140px;border:1px solid var(--border,#d0dce8);border-radius:10px;image-rendering:pixelated;background:#fff" />' +
-        '<div style="font-size:12px;color:var(--text2,#6b7f96);line-height:1.8">' +
-          '<b style="color:var(--text,#1a2535)">📲 تثبيت التطبيق على جهاز آخر</b><br>' +
-          'امسح هذا الرمز بكاميرا الهاتف للانتقال إلى صفحة التثبيت وستحمي التطبيق مباشرة.<br>' +
-          '<span style="direction:ltr;display:inline-block;font-size:11px;unicode-bidi:embed">' + mdroInstallUrl() + '</span>' +
+      '<div class="about-qr">' +
+        '<div class="qr-frame"><img id="settingsAboutQr" alt="رمز QR لتثبيت التطبيق" width="150" height="150" style="width:150px;height:150px;image-rendering:pixelated" /></div>' +
+        '<div class="about-qr-text">' +
+          '<b>📲 حمل التطبيق على جهاز آخر</b>' +
+          '<p>امسح هذا الرمز بكاميرا هاتفك — يفتح صفحة تثبيت مباشرة تسمح لك بإضافة التطبيق بسهولة.</p>' +
+          '<span class="about-url">' + mdroInstallUrl() + '</span>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -9866,6 +9912,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   positionNav();
   window.addEventListener('resize', positionNav);
+  // إعادة الحساب تلقائياً لو اتغير ارتفاع الهيدر (خطوط/تكبير) حتى لا يغطي التبويبات
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(positionNav);
+    var _h = document.querySelector('header');
+    var _n = document.querySelector('.nav');
+    if (_h) ro.observe(_h);
+    if (_n) ro.observe(_n);
+  }
   // إعادة الحساب بعد load كامل (الخطوط)
   window.addEventListener('load', positionNav);
 });
