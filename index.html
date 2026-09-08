@@ -182,7 +182,8 @@
     display: grid;
     grid-template-columns: auto auto 1fr auto auto auto;
     grid-template-areas:
-      "bm ttl ttl sd cd dr";
+      "bm ttl ttl sd cd dr"
+      "bm hos hos hos hos hos";
     column-gap: 16px; row-gap: 8px;
   }
   .header-brandmark {
@@ -207,8 +208,8 @@
   }
   body.is-owner .owner-crown { display: inline-flex; }
   .header-hospital {
-    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px;
-    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0;
+    grid-area: hos; display: inline-flex; align-items: center; gap: 7px;
+    font-size: clamp(12px,1.6vw,14px); color: #DFF3F0; align-self: end;
   }
   .header-side {
     grid-area: sd; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
@@ -722,29 +723,28 @@
     /* ── Header على الهاتف — بنمط الإداريات ── */
 header { padding: 17px 14px; }
     .header-inner {
-      display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
+      grid-template-columns: auto 1fr auto auto;
+      grid-template-areas:
+        "bm ttl ttl ttl"
+        "hos hos cd dr"
+        "sd sd sd sd";
+      column-gap: 10px; row-gap: 4px;
     }
-    .header-brandmark { order: 1; width: 44px; height: 44px; border-radius: 13px; }
+    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; }
     .header-brandmark img { width: 36px; height: 36px; border-radius: 10px; }
-    .header-titles {
-      order: 2; width: 112px; min-width: 0; display: flex; flex-direction: column; gap: 2px;
-    }
-    .header-title-row { flex-wrap: wrap; gap: 4px; }
+    .header-titles { min-width: 0; align-self: center; }
+    .header-title-row { gap: 5px; flex-wrap: nowrap; }
     .header-title-ar {
-      font-size: 12.5px; line-height: 1.35; overflow-wrap: break-word;
-      white-space: normal; overflow: visible; text-overflow: clip;
+      font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .owner-crown { font-size: 11px; }
-    .header-hospital {
-      font-size: 9.5px; line-height: 1.35; margin-top: 0; overflow-wrap: break-word;
-      white-space: normal;
-    }
-    .conn-chip { order: 3; align-self: flex-end; margin-inline-start: auto; padding: 4px 9px; font-size: 10.5px; }
+    .owner-crown { font-size: 13px; }
+    .header-hospital { font-size: 10px; align-self: center; }
+    .conn-chip { padding: 4px 9px; font-size: 10.5px; justify-self: end; align-self: center; }
     .conn-chip .conn-dot { width: 7px; height: 7px; }
-    .drawer-toggle { order: 4; align-self: flex-end; width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; }
+    .drawer-toggle { width: 33px; height: 33px; border-radius: 10px; gap: 3.5px; }
     .drawer-toggle span { width: 15px; height: 2px; }
     .header-side {
-      order: 5; width: 100%; display: grid; grid-template-columns: auto 1fr; align-items: center;
+      display: grid; grid-template-columns: auto 1fr; align-items: center;
       column-gap: 10px;
     }
     .header-date-chip { padding: 4px 12px; font-size: 11.5px; justify-self: start; }
@@ -1446,8 +1446,8 @@ setInterval(async () => {
         <span class="header-title-ar">ترصد الميكروبات المقاومة</span>
         <span class="owner-crown" id="headerOwnerCrown" title="المالك">👑</span>
       </div>
-      <span class="header-hospital">مستشفى المطرية التعليمي</span>
     </div>
+    <span class="header-hospital">مستشفى المطرية التعليمي</span>
     <div class="header-side">
       <span class="header-date-chip"><span id="headerDate">—</span></span>
       <div class="header-credit">Developed by <b>Ph Ahmed Elsayed</b><br>MTH Infection Control Specialist</div>
