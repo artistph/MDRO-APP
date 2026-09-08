@@ -215,7 +215,6 @@
   .header-date-chip #headerDate { font-weight: 700; }
   .header-credit { font-size: 10.5px; color: #BFDAD6; line-height: 1.5; text-align: start; }
   .header-credit b { color: #F2D98C; font-weight: 700; }
-  .header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
   .drawer-toggle {
     flex: none; width: 42px; height: 42px; border-radius: 12px; border: 1.5px solid #d0dce8;
     background: #fff; display: flex; flex-direction: column; justify-content: center;
@@ -714,22 +713,23 @@
     .month-grid { grid-template-columns: repeat(3, 1fr); }
     /* ── Header على الهاتف — بنمط الإداريات ── */
     header { padding: 12px 14px; }
-    .header-inner { gap: 11px; }
-    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; }
+    .header-inner { gap: 10px; }
+    .header-brandmark { width: 44px; height: 44px; border-radius: 13px; order: 1; }
     .header-brandmark img { width: 36px; height: 36px; border-radius: 10px; }
-    .header-titles { flex: 1 1 100px; min-width: 0; }
-    .header-title-ar { font-size: 17px; }
-    .header-hospital { font-size: 12px; }
+    .header-titles { flex: 1 1 60px; min-width: 0; order: 2; }
+    .header-title-ar { font-size: 15px; }
+    .header-hospital { font-size: 11px; }
+    .conn-chip { order: 3; }
+    .drawer-toggle { order: 4; }
     .header-side {
       width: 100%; display: grid; grid-template-columns: auto 1fr; align-items: center;
-      gap: 10px; margin-inline-start: 0; margin-top: 3px;
+      gap: 10px; margin-inline-start: 0; margin-top: 3px; order: 5;
     }
     .header-date-chip { padding: 4px 12px; font-size: 11.5px; justify-self: start; }
     .header-credit {
       display: block !important; justify-self: end; text-align: left !important;
       font-size: 9.5px; line-height: 1.5; margin-top: 0; min-width: 0;
     }
-    .header-actions { margin-inline-start: auto; }
     .conn-chip { padding: 6px 10px; font-size: 11px; }
     .drawer-toggle { width: 38px; height: 38px; }
   }
@@ -1368,7 +1368,7 @@ function updateSyncBadge() {
   const bt = document.getElementById('syncBadgeText');
   const on = navigator.onLine !== false && !!isOnline;
   if (b) { b.className = 'conn-chip ' + (on ? 'on' : 'off'); b.title = on ? 'متصل بالإنترنت — المزامنة تعمل لحظياً' : 'غير متصل — البيانات تُحفظ محلياً وتُزامن تلقائياً عند الاتصال'; }
-  if (bt) bt.textContent = on ? 'أونلاين' : 'أوفلاين';
+  if (bt) bt.textContent = on ? 'متصل' : 'غير متصل';
 }
 
 window.addEventListener('online', async () => {
@@ -1428,14 +1428,12 @@ setInterval(async () => {
       </div>
       <span class="header-hospital">مستشفى المطرية التعليمي</span>
     </div>
-    <div class="header-actions">
-      <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">أونلاين</span></span>
-      <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
-    </div>
     <div class="header-side">
       <span class="header-date-chip"><span id="headerDate">—</span></span>
       <div class="header-credit">Developed by <b>Ph Ahmed Elsayed</b><br>MTH Infection Control Specialist</div>
     </div>
+    <span id="syncBadge" class="conn-chip on"><span class="conn-dot"></span><span id="syncBadgeText">متصل</span></span>
+    <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
   </div>
 </header>
 
