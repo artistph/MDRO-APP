@@ -1,34 +1,57 @@
-// ═══════════════════════════════════════════════════════════
-// MDRO App – Service Worker
-// تعليمات الترقية: غيّر CACHE_VERSION فقط عند كل إصدار جديد
-// ═══════════════════════════════════════════════════════════
+﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// MDRO App â€“ Service Worker (Caching + Firebase Messaging)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging.js');
 
-const CACHE_VERSION = 'mdro-v164';
+firebase.initializeApp({
+  apiKey: "AIzaSyDttIrm6BxTtW2e20vGWS2Mqxitwxp6J7I",
+  authDomain: "mdro-379fd.firebaseapp.com",
+  projectId: "mdro-379fd",
+  storageBucket: "mdro-379fd.firebasestorage.app",
+  messagingSenderId: "409523753719",
+  appId: "1:409523753719:web:06b09908f23a3f6ec1f9f2"
+});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+  const { title, body, icon, badge } = payload.notification || {};
+  self.registration.showNotification(title || 'MDRO', {
+    body: body || '',
+    icon: icon || '/MDRO-APP/icon-192.png',
+    badge: badge || '/MDRO-APP/icon-192.png',
+    dir: 'rtl',
+    lang: 'ar',
+    requireInteraction: true,
+  });
+});
+
+// â”€â”€ Caching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const CACHE_VERSION = 'mdro-v135';
 const CACHE = CACHE_VERSION;
 
 const CORE_FILES = [
   'https://artistph.github.io/MDRO-APP/',
   'https://artistph.github.io/MDRO-APP/index.html',
+  'https://artistph.github.io/MDRO-APP/install.html',
   'https://artistph.github.io/MDRO-APP/manifest.json',
   'https://artistph.github.io/MDRO-APP/icon-192.png',
   'https://artistph.github.io/MDRO-APP/icon-512.png',
-  'https://artistph.github.io/MDRO-APP/sw.js'
+  'https://artistph.github.io/MDRO-APP/sw.js',
+  'https://artistph.github.io/MDRO-APP/js/qrcode.js',
+  'https://artistph.github.io/MDRO-APP/logo.png'
 ];
 
-// ── Install ───────────────────────────────────────────────
-// يشتغل مرة واحدة لما المتصفح يكتشف نسخة SW جديدة
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
       .then(cache => cache.addAll(CORE_FILES))
       .catch(err => console.warn('[SW] Install cache failed:', err))
   );
-  // لا تستنى: خلّي الـ SW الجديد يحل محل القديم فوراً
   self.skipWaiting();
 });
 
-// ── Activate ──────────────────────────────────────────────
-// يشتغل بعد install مباشرةً ويمسح كل الكاشات القديمة
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -42,16 +65,11 @@ self.addEventListener('activate', event => {
       );
     })
   );
-  // سيطر فوراً على كل الصفحات المفتوحة بدون ما تحتاج refresh
   self.clients.claim();
 });
 
-// ── Fetch ─────────────────────────────────────────────────
-// استراتيجية: Network First للملفات الأساسية، Cache First للباقي
 self.addEventListener('fetch', event => {
   const req = event.request;
-
-  // تجاهل: non-GET، chrome-extension، وطلبات Firebase/Firestore/CDN خارجي
   if (req.method !== 'GET') return;
   if (req.url.startsWith('chrome-extension://')) return;
   if (req.url.includes('firestore.googleapis.com')) return;
@@ -61,7 +79,6 @@ self.addEventListener('fetch', event => {
   const isAppFile = CORE_FILES.some(f => req.url === f || req.url.startsWith('https://artistph.github.io/MDRO-APP/'));
 
   if (isAppFile) {
-    // Network First: دايماً جرب النت أولاً عشان تجيب أحدث نسخة
     event.respondWith(
       fetch(req)
         .then(networkRes => {
@@ -72,14 +89,12 @@ self.addEventListener('fetch', event => {
           return networkRes;
         })
         .catch(() => {
-          // النت فشل: ارجع من الكاش (وضع أوفلاين)
           return caches.match(req).then(cached => {
             return cached || caches.match('https://artistph.github.io/MDRO-APP/index.html');
           });
         })
     );
   } else {
-    // باقي الطلبات (CDN, fonts): Cache First → fallback Network
     event.respondWith(
       caches.match(req).then(cached => {
         if (cached) return cached;
@@ -95,8 +110,6 @@ self.addEventListener('fetch', event => {
   }
 });
 
-// ── Message ───────────────────────────────────────────────
-// بيسمح للتطبيق يطلب تحديث فوري لو احتاج
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

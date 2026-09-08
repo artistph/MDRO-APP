@@ -1,0 +1,23 @@
+name: Deploy to Firebase Hosting
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install -g firebase-tools
+
+      - name: Deploy Firestore rules
+        run: firebase deploy --only firestore:rules --project mdro-379fd --token "${{ secrets.FIREBASE_TOKEN }}"
+
+      - name: Deploy to Firebase Hosting
+        run: firebase deploy --only hosting --project mdro-379fd --token "${{ secrets.FIREBASE_TOKEN }}"

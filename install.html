@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>تثبيت تطبيق MDRO — مستشفى المطرية التعليمي</title>
+<meta name="theme-color" content="#0f2a4a" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="MDRO" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" type="image/png" href="logo.png" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800;900&display=swap" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 20px;
+    background: linear-gradient(160deg, #f0f4f8 0%, #dfe9f1 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+    direction: rtl;
+  }
+  .install-card {
+    width: 100%; max-width: 380px;
+    background: #fff; border: 1px solid #d0dce8; border-radius: 24px;
+    padding: 30px 24px; box-shadow: 0 18px 50px rgba(15,42,74,.16); text-align: center;
+  }
+  .install-logo {
+    width: 86px; height: 86px; border-radius: 22px; margin: 0 auto 18px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(160deg, #1a7fa8, #0f2a4a);
+    border: 1px solid rgba(232,206,122,.35);
+    box-shadow: 0 10px 26px rgba(26,127,168,.4);
+  }
+  .install-logo img { width: 62px; height: 62px; object-fit: cover; border-radius: 14px; }
+  .install-card h1 { font-size: 22px; color: #0f2a4a; margin: 0 0 6px; font-weight: 900; }
+  .install-card .sub { font-size: 13px; color: #6b7f96; margin: 0 0 6px; }
+  .install-card .hosp { font-size: 12.5px; color: #b8860b; font-weight: 700; margin: 0 0 22px; }
+  .btn-install {
+    width: 100%; padding: 17px; font-size: 17px; font-weight: 800; border: none; border-radius: 14px; cursor: pointer;
+    background: linear-gradient(160deg, #1a7fa8, #0f2a4a); color: #fff;
+    box-shadow: 0 8px 22px rgba(15,42,74,.35); margin-bottom: 12px;
+    font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+  }
+  .btn-install:hover { transform: translateY(-1px); filter: brightness(1.05); }
+  .btn-install:active { transform: translateY(1px); }
+  .btn-install:disabled { opacity: .6; cursor: default; transform: none; }
+  .hint {
+    font-size: 12.5px; color: #6b7f96; line-height: 1.7;
+    background: #f0f4f8; border: 1px dashed #c3d2e0; border-radius: 12px; padding: 12px; margin-top: 6px;
+  }
+  .hint b { color: #1a7fa8; }
+  .open-btn {
+    background: none; border: none; color: #1a7fa8; font-weight: 700; font-size: 13.5px;
+    cursor: pointer; text-decoration: underline; margin-top: 14px; font-family: 'Cairo', sans-serif;
+  }
+  #installMsg { display: none; margin-top: 12px; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 700; }
+  #installMsg.show { display: block; }
+  #installMsg.warn { background: #fdf3e3; color: #b8860b; }
+  #installMsg.ok { background: #e3f4ea; color: #1a8a5a; }
+</style>
+</head>
+<body>
+<div class="install-card">
+  <div class="install-logo"><img src="logo.png" alt="شعار التطبيق" /></div>
+  <h1>تثبيت تطبيق MDRO</h1>
+  <p class="sub">نظام ترصد الميكروبات المقاومة</p>
+  <p class="hosp">مستشفى المطرية التعليمي</p>
+  <button class="btn-install" id="installBtn">⬇️ اضغط للتثبيت</button>
+  <div class="hint" id="hint">
+    اضغط على زر <b>«تثبيت التطبيق»</b> ثم أكّد في النافذة التي تظهر.<br/>
+    بعد التثبيت ستجد أيقونة <b>MDRO</b> على شاشتك الرئيسية.
+  </div>
+  <button class="open-btn" id="openAppBtn">أو افتح التطبيق مباشرة دون تثبيت ←</button>
+  <div id="installMsg"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var btn = document.getElementById('installBtn');
+  var openBtn = document.getElementById('openAppBtn');
+  var msg = document.getElementById('installMsg');
+  var hint = document.getElementById('hint');
+  var deferred = null;
+
+  function show(el, text, kind) {
+    msg.textContent = text;
+    msg.className = 'show ' + (kind || 'warn');
+  }
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    btn.disabled = false;
+    btn.textContent = '⬇️ اضغط للتثبيت';
+  });
+
+  btn.addEventListener('click', function () {
+    if (deferred) {
+      deferred.prompt();
+      deferred.userChoice.then(function (choice) {
+        if (choice.outcome === 'accepted') { show(msg, 'تم تثبيت التطبيق بنجاح ✓', 'ok'); }
+        else { show(msg, 'ألغيت التثبيت — يمكنك إعادة المحاولة.'); }
+        deferred = null;
+      });
+    } else {
+      show(msg, 'لا يوجد زر تثبيت تلقائي هنا. افتح قائمة المتصفح (⋮) واختر «إضافة إلى الشاشة الرئيسية».');
+    }
+  });
+
+  if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+    btn.style.display = 'none';
+    hint.innerHTML = 'التطبيق <b>مثبّت بالفعل</b> على هذا الجهاز ✓';
+  }
+
+  openBtn.addEventListener('click', function () {
+    window.location.href = './';
+  });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+})();
+</script>
+</body>
+</html>
