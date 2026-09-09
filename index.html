@@ -748,8 +748,8 @@ header { padding: 17px 14px; }
     }
     .header-brandmark { grid-area: bm; width: 44px; height: 44px; border-radius: 13px; }
     .header-brandmark img { width: 36px; height: 36px; border-radius: 10px; }
-    .header-titles { grid-area: ttl; min-width: 0; align-self: center; }
-    .header-title-row { gap: 5px; flex-wrap: nowrap; }
+    .header-titles { display: contents; }
+    .header-title-row { grid-area: ttl; min-width: 0; align-self: center; gap: 5px; flex-wrap: nowrap; }
     .header-title-ar {
       font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
@@ -1467,8 +1467,8 @@ setInterval(async () => {
         <span class="header-title-ar">ترصد الميكروبات المقاومة</span>
         <span class="owner-crown" id="headerOwnerCrown" title="المالك">👑</span>
       </div>
+      <span class="header-hospital">مستشفى المطرية التعليمي</span>
     </div>
-    <span class="header-hospital">مستشفى المطرية التعليمي</span>
     <div class="header-side">
       <span class="header-date-chip"><span id="headerDate">—</span></span>
       <div class="header-credit">Developed by <b>Ph Ahmed Elsayed</b><br>MTH Infection Control Specialist</div>
