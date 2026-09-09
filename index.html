@@ -8776,6 +8776,15 @@ function renderDrawerUser() {
       }
     }
   }
+  // ضمان: لو الجلسة الحية فاضية الاسم/البريد (جلسة كود مالك قديمة) — نرجع
+  // لآخر حساب معروف على الجهاز حتى لا يفرغ سطر الحساب في السايد بار.
+  if (gotUser && (!name || !email)) {
+    const last = mdroGetLastUser();
+    if (last) {
+      if (!name) name = last.name || '';
+      if (!email) email = last.email || '';
+    }
+  }
   if (!gotUser) {
     const last = mdroGetLastUser();
     if (last) { name = last.name || ''; email = last.email || ''; role = last.role || ''; gotUser = true; }
@@ -8911,6 +8920,14 @@ function activateOwnerMode() {
   requireOwnerPassword(async () => {
     _currentRole = 'owner';
     localStorage.setItem('mdro_device_role', 'owner');
+    // علّق جلسة MDROAuth محلية باسم/بريد المالك الحقيقي (من Firestore)
+    // حتى لا يظهر سطر الحساب أو قالب البيانات فارغاً في وضع المالك المؤقت.
+    if (window.MDROAuth && window.MDROAuth.setLocalOwnerSessionFromBootstrap) {
+      await window.MDROAuth.setLocalOwnerSessionFromBootstrap();
+    }
+    const _acc = (window.MDROAuth && window.MDROAuth.get) ? window.MDROAuth.get() : {};
+    const _oc2 = (typeof getOwnerContact === 'function') ? getOwnerContact() : {};
+    mdroSetLastUser(_acc.name || (_oc2 && _oc2.name) || '', _acc.email || (_oc2 && _oc2.email) || '', 'owner');
     // تحديث Firestore
     if (db && isOnline) {
       try {
@@ -9163,7 +9180,7 @@ function forgotLoginWithOwnerCode() {
     return Promise.resolve(entered === OWNER_SECRET);
   };
 
-  verify().then(function(ok) {
+  verify().then(async function(ok) {
     if (!ok) {
       errEl.textContent = '❌ الكود غير صحيح';
       if (inp) { inp.value = ''; inp.focus(); }
@@ -9174,12 +9191,15 @@ function forgotLoginWithOwnerCode() {
     closeForgotPwd();
     _currentRole = 'owner';
     const _oc = (typeof getOwnerContact === 'function') ? getOwnerContact() : {};
-    // اربط جلسة MDROAuth محلية (بلا حساب Firebase) حتى تفتح "الحساب الخاص بي"
-    // و"إدارة المستخدمين" كاملة فوراً دون إعادة تسجيل دخول.
-    if (window.MDROAuth && window.MDROAuth.setLocalSession) {
+    // اربط جلسة MDROAuth محلية (بلا حساب Firebase) مبنية على اسم/بريد المالك
+    // الحقيقي من Firestore حتى لا يظهر سطر الحساب أو قالب البيانات فارغاً.
+    if (window.MDROAuth && window.MDROAuth.setLocalOwnerSessionFromBootstrap) {
+      await window.MDROAuth.setLocalOwnerSessionFromBootstrap();
+    } else if (window.MDROAuth && window.MDROAuth.setLocalSession) {
       window.MDROAuth.setLocalSession({ uid: 'owner-code-local', name: _oc.name || '', email: _oc.email || '', role: 'owner' });
     }
-    mdroSetLastUser((_oc && _oc.name) ? _oc.name : '', (_oc && _oc.email) ? _oc.email : '', 'owner');
+    const _acc = (window.MDROAuth && window.MDROAuth.get) ? window.MDROAuth.get() : {};
+    mdroSetLastUser(_acc.name || (_oc && _oc.name) || '', _acc.email || (_oc && _oc.email) || '', 'owner');
     localStorage.setItem('mdro_device_role', 'owner');
     localStorage.setItem('mdro_session', Date.now());
     localStorage.setItem('mdro_session_active', '1');

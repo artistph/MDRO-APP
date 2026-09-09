@@ -26,11 +26,24 @@ async function renderMDROUserManager() {
   if (!window.MDROAuth || !window.MDROAuth.canManageUsers()) { wrap.innerHTML = ''; return; }
 
   const acc = window.MDROAuth.get();
+  let dispName = acc.name || '';
+  let dispEmail = acc.email || '';
+  // ضمان: لو الجلسة فاضية الاسم/البريد (دخول كود مالك من جلسة قديمة) —
+  // نرجع لآخر حساب مالك معروف حتى لا يفرغ قالب حساب المالك.
+  if (!dispName || !dispEmail) {
+    try {
+      const lu = JSON.parse(localStorage.getItem('mdro_last_user') || 'null');
+      if (lu && lu.role === 'owner') {
+        if (!dispName) dispName = lu.name || '';
+        if (!dispEmail) dispEmail = lu.email || '';
+      }
+    } catch {}
+  }
   wrap.innerHTML =
     '<h3>الحساب الخاص بي <span style="font-size:11px;color:#C9A227;font-weight:700">(👑 المالك)</span></h3>' +
     '<div class="owner-profile">' +
-      '<div class="owner-row"><span class="or-label">الاسم</span><span class="or-value" id="mdroOpName">' + escMDRO(acc.name || '') + '</span><button class="btn btn-ghost btn-sm" data-medit="name">تعديل</button></div>' +
-      '<div class="owner-row stack"><span class="or-label">البريد</span><span class="or-value" id="mdroOpEmail">' + escMDRO(acc.email || '') + '</span><button class="btn btn-ghost btn-sm" data-medit="email">تعديل</button></div>' +
+      '<div class="owner-row"><span class="or-label">الاسم</span><span class="or-value" id="mdroOpName">' + escMDRO(dispName) + '</span><button class="btn btn-ghost btn-sm" data-medit="name">تعديل</button></div>' +
+      '<div class="owner-row stack"><span class="or-label">البريد</span><span class="or-value" id="mdroOpEmail">' + escMDRO(dispEmail) + '</span><button class="btn btn-ghost btn-sm" data-medit="email">تعديل</button></div>' +
       '<div class="owner-row"><span class="or-label">كلمة السر</span><span class="or-value muted">••••••••</span><button class="btn btn-ghost btn-sm" data-medit="pass">تعديل</button></div>' +
       '<div class="owner-row"><span class="or-label">الدور</span><span class="or-value">' + mdroRoleBadge('owner') + '</span><span></span></div>' +
       '<div class="owner-edit-box" id="mdroOwnerEditBox" style="display:none"></div>' +

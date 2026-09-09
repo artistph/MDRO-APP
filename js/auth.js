@@ -437,6 +437,29 @@ window.MDROAuth = (function () {
     return currentUser;
   }
 
+  /** نسخة من جلسة كود المالك مبنية على اسم/بريد المالك الحقيقي من Firestore
+   *  (bootstrap/owner → users/{uid}) حتى لا يظهر سطر الحساب أو قالب بيانات
+   *  المالك فارغاً عند الدخول بكود المالك. */
+  async function setLocalOwnerSessionFromBootstrap() {
+    let name = '', email = '';
+    try {
+      const bs = await loadBootstrapOwner();
+      const by = (bs && bs.by) ? bs.by : null;
+      if (by) {
+        const d = await fetchUser(by);
+        if (d) { name = d.name || ''; email = d.email || d.authEmail || ''; }
+      }
+    } catch {}
+    if (!name && !email) {
+      try {
+        const lr = localStorage.getItem('mdro_last_user');
+        const c = lr ? JSON.parse(lr) : null;
+        if (c && c.role === 'owner') { if (!name) name = c.name || ''; if (!email) email = c.email || ''; }
+      } catch {}
+    }
+    return setLocalSession({ uid: 'owner-code-local', name, email, role: 'owner' });
+  }
+
   /* ---------- استرجاع جلسة سابقة / onAuthStateChanged ---------- */
   function initSessionListener(callback) {
     if (typeof sessionAuth === 'undefined') return;
@@ -492,7 +515,7 @@ window.MDROAuth = (function () {
     currentUser, login, logout, isLoggedIn, get, canEdit, canPrint, canManageUsers,
     listUsers, createUser, setRole, deleteUser, updateUserData, updateOwnerAccount,
     verifyOwnerCode, setOwnerCode, ensureOwnerCode, fetchUser, closeBootstrapIfNeeded,
-    setLocalSession, initSessionListener, errorMsg, cachedSession, cacheSession,
+    setLocalSession, setLocalOwnerSessionFromBootstrap, initSessionListener, errorMsg, cachedSession, cacheSession,
   };
 })();
 
