@@ -292,19 +292,19 @@
     position: sticky; right: 0; top: 0; z-index: 4;
     flex: 0 0 auto; align-self: stretch;
     display: flex; align-items: center;
-    margin-inline-start: -6px;   /* يِبلع فجوة الشريط */
-    margin-inline-end: -10px;    /* يِبلع padding الشريط الأيمن */
-    padding-inline-start: 12px;
-    padding-inline-end: 10px;
+    padding-inline-start: 10px;  /* يغطي padding الشريط الأيمن */
+    margin-inline-start: -10px;
     background: var(--primary);
-    box-shadow: inset 8px 0 12px -8px rgba(0,0,0,.55);
+    box-shadow: inset 4px 0 8px -9px rgba(0,0,0,.5);
   }
-  .nav .drawer-toggle {
+  .nav .nav-fence .drawer-toggle {
     flex: 0 0 auto;
     width: 42px; height: 42px; padding: 0; margin: 0;
-    background: #fff; border: 1.5px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.10);
+    border: 1.5px solid rgba(255,255,255,0.22);
   }
-  .nav .drawer-toggle:hover { background: #f0f4f8; }
+  .nav .nav-fence .drawer-toggle:hover { background: rgba(255,255,255,0.18); }
+  .nav .nav-fence .drawer-toggle span { background: rgba(255,255,255,0.95); }
 
   /* ─── LDM BRIDGE ─── */
   .ldm-main-btn {
