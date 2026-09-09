@@ -289,7 +289,8 @@
     border-color: rgba(255,255,255,0.25);
   }
   .nav .drawer-toggle {
-    width: 42px; height: 42px; padding: 0; margin: 0; flex: 0 0 auto;
+    position: sticky; right: 0; z-index: 3; flex: 0 0 auto;
+    width: 42px; height: 42px; padding: 0; margin: 0;
     background: #fff; border: 1.5px solid rgba(255,255,255,0.4);
   }
   .nav .drawer-toggle:hover { background: #f0f4f8; }
@@ -9266,7 +9267,7 @@ function openChangePwd() {
   const overlay = document.getElementById('changePwdOverlay');
   const drawer = document.getElementById('settingsDrawer');
   if (overlay) overlay.style.display = 'flex';
-  if (drawer) setTimeout(() => { drawer.style.marginLeft = '0'; }, 10);
+  if (drawer) setTimeout(() => { drawer.style.marginRight = '0'; }, 10);
 }
 
 function saveContactOnly() {
@@ -9324,7 +9325,7 @@ function saveCredentials() { showSettingsPage(2); }
 function closeChangePwd() {
   const drawer = document.getElementById('settingsDrawer');
   const overlay = document.getElementById('changePwdOverlay');
-  if (drawer) drawer.style.marginLeft = '-340px';
+  if (drawer) drawer.style.marginRight = '-340px';
   setTimeout(() => { if (overlay) overlay.style.display = 'none'; }, 300);
 }
 function confirmLogout() {
@@ -10080,7 +10081,7 @@ window.addEventListener('appinstalled', () => {
 
 <!-- ═══════════════ SETTINGS DRAWER ═══════════════ -->
 <div id="changePwdOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;" onclick="if(event.target===this)closeChangePwd()">
-  <div id="settingsDrawer" style="background:var(--card,#fff);width:min(320px,88vw);direction:rtl;font-family:'Cairo',sans-serif;overflow:hidden;height:100%;overflow-y:auto;position:absolute;top:0;left:0;margin-left:-340px;transition:margin-left .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;color:var(--text,#1a2535)">
+  <div id="settingsDrawer" style="background:var(--card,#fff);width:min(320px,88vw);direction:rtl;font-family:'Cairo',sans-serif;overflow:hidden;height:100%;overflow-y:auto;position:absolute;top:0;right:0;margin-right:-340px;transition:margin-right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;color:var(--text,#1a2535)">
 
     <!-- هيدر السايد بار (بنمط تطبيق الإداريات) -->
     <div class="drawer-head">
