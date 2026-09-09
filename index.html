@@ -291,20 +291,21 @@
   .nav .nav-fence {
     position: sticky; right: 0; top: 0; z-index: 4;
     flex: 0 0 auto; align-self: stretch;
-    display: flex; align-items: center;
+    display: flex; align-items: center; justify-content: center;
+    width: 38px;                /* 1 سم من بداية الشريط */
     padding: 0;
-    margin-inline-start: -10px;  /* الخلفية تبدأ من حافة الشريط */
+    margin-inline-start: -10px; /* يبدأ من حافة الشريط اليمنى */
     background: var(--primary);
     box-shadow: inset 4px 0 8px -9px rgba(0,0,0,.5);
   }
   .nav .nav-fence .drawer-toggle {
     flex: 0 0 auto;
-    width: 42px; height: 42px; padding: 0; margin: 0;
+    width: 36px; height: 36px; padding: 0; margin: 0;
     background: rgba(255,255,255,0.10);
     border: 1.5px solid rgba(255,255,255,0.22);
   }
   .nav .nav-fence .drawer-toggle:hover { background: rgba(255,255,255,0.18); }
-  .nav .nav-fence .drawer-toggle span { background: rgba(255,255,255,0.95); }
+  .nav .nav-fence .drawer-toggle span { background: rgba(255,255,255,0.95); width: 15px; }
 
   /* ─── LDM BRIDGE ─── */
   .ldm-main-btn {
