@@ -292,17 +292,12 @@
     position: sticky; right: 0; top: 0; z-index: 4;
     flex: 0 0 auto; align-self: stretch;
     display: flex; align-items: center;
-    padding: 0 0 0 5px;        /* يملا الفراغ ورا الزرار */
+    padding: 0 0 0 10px;        /* مساحة واضحة بين الزرار وأول تبويب */
     margin: 0;
     margin-inline-start: -10px; /* يبدأ من حافة الشريط اليمنى */
     background: var(--primary);
   }
-  .nav .nav-fence .drawer-toggle {
-    background: var(--accent2, #E8B84B);
-    border: 1.5px solid rgba(255,255,255,0.35);
-  }
-  .nav .nav-fence .drawer-toggle:hover { background: #dcab3f; }
-  .nav .nav-fence .drawer-toggle span { background: #14304a; width: 16px; }
+  .nav .nav-fence .drawer-toggle span { background: rgba(255,255,255,0.85); width: 16px; }
 
   /* ─── LDM BRIDGE ─── */
   .ldm-main-btn {
