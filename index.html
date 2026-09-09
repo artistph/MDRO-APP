@@ -8725,6 +8725,14 @@ async function periodicRoleCheck() {
   if (!isOnline || !db || !window._fs) return;
   const session = localStorage.getItem('mdro_session');
   if (!session) return;
+  // النظام الجديد (Firebase Accounts): الأدوار من حساب المستخدم — لا فحص أجهزة إطلاقاً.
+  if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
+  // دخول بكود المالك أو جلسة محلية صالحة: لا تُسقط الصلاحية المحفوظة من مستند device قديم.
+  if (localStorage.getItem('mdro_device_role') === 'owner' || localStorage.getItem('mdro_device_role') === 'editor' || localStorage.getItem('mdro_device_role') === 'viewer') return;
+  // حتى لو mdro_device_role نزل لـ pending لحظياً — لا نقبل إسقاطاً لدور device
+  // ما دام يوجد آخر حساب سجّل على هذا الجهاز بدور مكتمل (mdro_last_user).
+  var _lu = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
+  if (_lu && (_lu.role === 'owner' || _lu.role === 'editor' || _lu.role === 'viewer')) return;
   const prevRole = _currentRole;
   // لا نستخدم checkDeviceAccess عشان متعملش applyRoleUI مرتين
   try {
@@ -8761,7 +8769,7 @@ async function periodicRoleCheck() {
     }
   } catch(e) { console.warn('periodicRoleCheck:', e); }
 }
-setInterval(periodicRoleCheck, 10 * 1000); // كل 10 ثواني
+setInterval(() => periodicRoleCheck(), 10 * 1000); // كل 10 ثواني (يستدعي النسخة المحمية والمحدّثة)
 // تأخير الأول 20 ثانية عشان checkDeviceAccess تخلص أول وتتجنب الـ race condition
 let _roleCheckReady = false;
 setTimeout(() => { _roleCheckReady = true; }, 20000);
@@ -8777,6 +8785,9 @@ periodicRoleCheck = async function() {
     var _sv = localStorage.getItem('mdro_device_role');
     if (_sv === 'owner' || _sv === 'editor' || _sv === 'viewer') return;
   }
+  // آخر حساب سجّل بدور مكتمل (mdro_last_user) هو دليل على صلاحية — لا تُسقط.
+  var _lu2 = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
+  if (_lu2 && (_lu2.role === 'owner' || _lu2.role === 'editor' || _lu2.role === 'viewer')) return;
   // لا تظهر toast لو الدور لسه هو نفسه في localStorage
   const saved = localStorage.getItem('mdro_device_role');
   if (!saved || saved === 'pending') { await _origPeriodicRoleCheck(); return; }

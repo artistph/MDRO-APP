@@ -470,7 +470,11 @@ window.MDROAuth = (function () {
           const cached = cachedSession();
           let pendingLogout = false;
           try { pendingLogout = !!sessionStorage.getItem(MDRO_LOGOUT_FLAG); } catch {}
-          if (cached && cached.role && navigator.onLine === false && !pendingLogout) {
+          // أبقِ آخر جلسة صالحة محفوظة إلا عند خروج صريح، أو جلسة أقدم من 7 أيام
+          // مع اتصال فعلي — حتى لا تحوّل لحظة شبكة عابرة/تحديث توكن إلى "قيد الانتظار"
+          // وتمسح بيانات الحساب من القالب.
+          const cacheFresh = cached && cached.at && (Date.now() - cached.at) < 7 * 24 * 3600 * 1000;
+          if (cached && cached.role && !pendingLogout && (navigator.onLine === false || cacheFresh)) {
             currentUser = { uid: cached.uid, email: cached.email, name: cached.name, role: cached.role };
             _setLocalRole(currentUser.role);
             if (typeof callback === 'function') callback(true, { offline: true });
