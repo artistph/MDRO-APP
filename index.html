@@ -8636,7 +8636,9 @@ let OWNER_SECRET = null; // يتحمل من Firestore — مش مخزن في ا�
   }
 */
 // الأدوار: owner | editor | viewer | pending | blocked
-let _currentRole = 'pending';
+// var (وليست let) حتى تتحد مع window._currentRole التي يكتبها MDROAuth —
+// لا يوجد متغيران منفصلان يتباعدان ويسببان تذبذب الصلاحية.
+var _currentRole = 'pending';
 
 function getDeviceId() {
   let id = localStorage.getItem('mdro_device_id');
@@ -8769,6 +8771,12 @@ periodicRoleCheck = async function() {
   // في النظام الجديد (Firebase Accounts) الدور يُدار عبر حساب المستخدم وليس عبر devices —
   // نتجاوز الفحص القديم كلياً حتى لا يتعارض مع أدوار المستخدمين من MDROAuth.
   if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
+  // جلسة محلية صالحة (دخول بكود المالك أو جلسة مدرّجة بلا حساب Firebase) — لا نسمح
+  // لمستند device قديم (دورُه leftover pending/قديم) بإسقاط صلاحية صحيحة.
+  if (localStorage.getItem('mdro_session_active') || localStorage.getItem('mdro_session')) {
+    var _sv = localStorage.getItem('mdro_device_role');
+    if (_sv === 'owner' || _sv === 'editor' || _sv === 'viewer') return;
+  }
   // لا تظهر toast لو الدور لسه هو نفسه في localStorage
   const saved = localStorage.getItem('mdro_device_role');
   if (!saved || saved === 'pending') { await _origPeriodicRoleCheck(); return; }
@@ -8797,6 +8805,13 @@ function applyRoleUI() {
   // Viewer: تعطيل كل حاجة فيها كتابة أو تصدير
   if (role === 'viewer') {
     applyViewerRestrictions();
+  }
+
+  // لو صفحة الإعدادات مفتوحة وقسم إدارة المستخدمين ظاهر — أعده فور تغيّر الدور
+  // حتى لا يلزم المستخدم تسجيل خروج/دخول لظهور "الحساب الخاص بي" بصلاحياته الكاملة.
+  var umw = document.getElementById('mdroUserManagerWrap');
+  if (umw && typeof renderMDROUserManager === 'function') {
+    try { renderMDROUserManager(); } catch {}
   }
 }
 
@@ -9230,6 +9245,11 @@ function forgotLoginWithOwnerCode() {
     closeForgotPwd();
     _currentRole = 'owner';
     const _oc = (typeof getOwnerContact === 'function') ? getOwnerContact() : {};
+    // اربط جلسة MDROAuth محلية (بلا حساب Firebase) حتى تفتح "الحساب الخاص بي"
+    // و"إدارة المستخدمين" كاملة فوراً دون إعادة تسجيل دخول.
+    if (window.MDROAuth && window.MDROAuth.setLocalSession) {
+      window.MDROAuth.setLocalSession({ uid: 'owner-code-local', name: _oc.name || '', email: _oc.email || '', role: 'owner' });
+    }
     mdroSetLastUser((_oc && _oc.name) ? _oc.name : '', (_oc && _oc.email) ? _oc.email : '', 'owner');
     localStorage.setItem('mdro_device_role', 'owner');
     localStorage.setItem('mdro_session', Date.now());

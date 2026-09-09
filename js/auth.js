@@ -26,6 +26,20 @@ window.MDROAuth = (function () {
     } catch { return null; }
   }
 
+  /** جلب مستند المستخدم مع إعادة محاولة للأخطاء العابرة (شبكة/Firestore)
+   *  حتى لا يسقط دور مستخدم حقيقي إلى pending بسبب قراءة فاشلة لحظياً */
+  async function fetchUserWithRetry(uid, tries) {
+    const max = tries || 3;
+    let d = null;
+    for (let i = 0; i < max; i++) {
+      d = await fetchUser(uid);
+      if (d) return d;
+      if (navigator.onLine === false) return null;
+      await new Promise(r => setTimeout(r, 500));
+    }
+    return d;
+  }
+
   async function loadBootstrapOwner() {
     try {
       const snap = await dbCompat.collection('bootstrap').doc('owner').get();
@@ -328,6 +342,9 @@ window.MDROAuth = (function () {
   async function updateOwnerAccount({ name, email, newPassword, currentPassword }, ownerCode) {
     if (!canManageUsers()) return { ok: false, msg: 'صلاحية المالك فقط.' };
     if (!currentUser || !currentUser.uid) return { ok: false, msg: 'لم يتم التعرف على الحساب.' };
+    if (String(currentUser.uid).indexOf('owner-code-') === 0) {
+      return { ok: false, msg: 'دخلت بكود المالك (جلسة محلية) — سجّل بحسابك الحقيقي لتعديل بياناتك.' };
+    }
     const codeOk = await verifyOwnerCode(ownerCode);
     if (!codeOk) return { ok: false, msg: 'كود المالك غير صحيح.' };
 
@@ -406,6 +423,20 @@ window.MDROAuth = (function () {
     try { sessionStorage.removeItem('mdro_owner_pass'); } catch {}
   }
 
+  /* ---------- جلسة محلية (دخول كود المالك بدون حساب Firebase) ---------- */
+  /** يربط جلسة owner محلية ليفتح "إدارة المستخدمين" كاملة دون إعادة تسجيل دخول. */
+  function setLocalSession(account) {
+    currentUser = {
+      uid: (account && account.uid) || 'owner-code-local',
+      email: (account && account.email) || '',
+      name: (account && account.name) || '',
+      role: (account && account.role) || 'owner',
+    };
+    cacheSession(currentUser);
+    _setLocalRole(currentUser.role);
+    return currentUser;
+  }
+
   /* ---------- استرجاع جلسة سابقة / onAuthStateChanged ---------- */
   function initSessionListener(callback) {
     if (typeof sessionAuth === 'undefined') return;
@@ -414,7 +445,7 @@ window.MDROAuth = (function () {
         if (user) {
           let disp = user.email || '';
           try { disp = sessionStorage.getItem('mdro_display_email') || disp; } catch {}
-          fetchUser(user.uid).then(d => {
+          fetchUserWithRetry(user.uid).then(d => {
             const cached = cachedSession();
             // لا نلمح بالـ viewer افتراضياً عند فشل جلب المستند — نتحسس أدق مصدر محفوظ
             let role = (d && d.role) || (cached && cached.uid === user.uid ? (cached.role || '') : '');
@@ -457,7 +488,7 @@ window.MDROAuth = (function () {
     currentUser, login, logout, isLoggedIn, get, canEdit, canPrint, canManageUsers,
     listUsers, createUser, setRole, deleteUser, updateUserData, updateOwnerAccount,
     verifyOwnerCode, setOwnerCode, ensureOwnerCode, fetchUser, closeBootstrapIfNeeded,
-    initSessionListener, errorMsg, cachedSession, cacheSession,
+    setLocalSession, initSessionListener, errorMsg, cachedSession, cacheSession,
   };
 })();
 
