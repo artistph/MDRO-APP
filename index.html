@@ -288,8 +288,19 @@
     color: #fff;
     border-color: rgba(255,255,255,0.25);
   }
+  .nav .nav-fence {
+    position: sticky; right: 0; top: 0; z-index: 4;
+    flex: 0 0 auto; align-self: stretch;
+    display: flex; align-items: center;
+    margin-inline-start: -6px;   /* يِبلع فجوة الشريط */
+    margin-inline-end: -10px;    /* يِبلع padding الشريط الأيمن */
+    padding-inline-start: 12px;
+    padding-inline-end: 10px;
+    background: var(--primary);
+    box-shadow: inset 8px 0 12px -8px rgba(0,0,0,.55);
+  }
   .nav .drawer-toggle {
-    position: sticky; right: 0; z-index: 3; flex: 0 0 auto;
+    flex: 0 0 auto;
     width: 42px; height: 42px; padding: 0; margin: 0;
     background: #fff; border: 1.5px solid rgba(255,255,255,0.4);
   }
@@ -1465,7 +1476,9 @@ setInterval(async () => {
 </header>
 
 <div class="nav">
-  <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
+  <div class="nav-fence">
+    <button onclick="openChangePwd()" class="drawer-toggle" title="القائمة" aria-label="القائمة"><span></span><span></span><span></span></button>
+  </div>
   <button class="active" id="navBtnHome" onclick="switchTab('home')">🏠 الرئيسية</button>
   <button id="navBtnEntry" onclick="switchTab('entry')">➕ إدخال حالة</button>
   <button id="navBtnStay" onclick="switchTab('stay')">🛏 أيام الإقامة</button>
