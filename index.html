@@ -289,13 +289,19 @@
     border-color: rgba(255,255,255,0.25);
   }
   .nav .nav-fence {
-    position: sticky; right: 0; top: 0; z-index: 4;
+    position: sticky; right: 0; top: 0; bottom: 0; z-index: 4;
     flex: 0 0 auto; align-self: stretch;
-    display: flex; align-items: center;
-    padding: 0 0 0 10px;        /* مساحة واضحة بين الزرار وأول تبويب */
-    margin: 0;
-    margin-inline-start: -10px; /* يبدأ من حافة الشريط اليمنى */
-    background: var(--primary);
+    display: flex; align-items: stretch;
+    padding: 0 0 0 12px;            /* مسافة واضحة بين الزرار وأول تبويب */
+    margin: -7px 0 -7px 0;          /* تتوازى مع padding الشريط => الخلفية تصل لحواف الشريط */
+    margin-inline-start: -10px;     /* تبدأ من حافة الفون */
+    background: transparent;
+  }
+  .nav .nav-fence .drawer-toggle {
+    width: 42px; height: auto;
+    background: rgba(255,255,255,0.08);   /* نفس خلفية التبويبات => مكتملة للثلاث حواف */
+    border: 1.5px solid rgba(255,255,255,0.15);
+    border-radius: 0;
   }
   .nav .nav-fence .drawer-toggle span { background: rgba(255,255,255,0.85); width: 16px; }
 
@@ -751,7 +757,7 @@ header { padding: 17px 14px; }
     .header-hospital::before { content: none; }
     .conn-chip { grid-area: cd; padding: 4px 9px; font-size: 10.5px; justify-self: start; align-self: center; }
     .conn-chip .conn-dot { width: 7px; height: 7px; }
-    .nav .nav-fence .drawer-toggle { width: 33px; height: 33px; }
+    .nav .nav-fence .drawer-toggle { width: 33px; }
     .nav .nav-fence .drawer-toggle span { width: 14px; }
     .header-side {
       grid-area: sd; justify-self: start; display: grid;
