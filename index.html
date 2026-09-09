@@ -1437,24 +1437,9 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && db && isOnline) schedulePull(300);
 });
 
-// تحقق دوري من صلاحيات الجهاز كل 5 دقائق (نظام الأجهزة القديم فقط)
-setInterval(async () => {
-  const session = localStorage.getItem('mdro_session');
-  if (!session || !isOnline) return;
-  // النظام الجديد (Firebase Accounts): الأدوار من حساب المستخدم — لا فحص أجهزة.
-  if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
-  // دخول بكود المالك أو جلسة محلية صالحة: الدور المحفوظ هو المصدر ولا يُسقط تلقائياً.
-  const savedRole = localStorage.getItem('mdro_device_role');
-  if (savedRole && savedRole !== 'pending' && savedRole !== 'blocked') return;
-  const role = await checkDeviceAccess();
-  if (role === 'blocked' || role === 'pending') {
-    doLogout();
-    setTimeout(() => {
-      document.getElementById('loginError').textContent =
-        role === 'blocked' ? '🚫 هذا الجهاز محظور. تواصل مع مسؤول النظام.' : '⏳ انتهت صلاحية الجلسة.';
-    }, 150);
-  }
-}, 5 * 60 * 1000);
+// تحقق دوري قديم (نظام الأجهزة) — أُلغي نهائياً: الحسابات عبر Firebase،
+// ولا يلزم تسجيل خروج بسبب مستند device قديم.
+setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth فقط */ }, 5 * 60 * 1000);
 </script>
 </head>
 <body>
@@ -3794,7 +3779,7 @@ async function initFCM() {
   try {
     // تسجيل Service Worker
     if (!('serviceWorker' in navigator)) return;
-    const reg = await navigator.serviceWorker.register('./sw.js');
+    const reg = await navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' });
 
     // تهيئة Firebase Messaging
     const { getMessaging, getToken, onMessage } = await import(
@@ -8721,81 +8706,14 @@ async function checkDeviceAccess() {
 }
 
 // تحقق دوري من تغيير الدور (بدل MutationObserver)
+// ── نظام أدوار الأجهزة القديم (devices): أُزيل نهائياً ────────────────────
+// الأدوار الآن من حسابات Firebase فقط (users/{uid} → MDROAuth). أي قراءة لـ
+// مستندات devices كانت تسقط صلاحية صحيحة لـ "قيد الانتظار" وتعيد كتابة الحساب
+// أوفرلاين — لم تعد تُستخدم إطلاقاً. الدالة تُترك فارغة للتوافق مع المؤقت.
 async function periodicRoleCheck() {
-  if (!isOnline || !db || !window._fs) return;
-  const session = localStorage.getItem('mdro_session');
-  if (!session) return;
-  // النظام الجديد (Firebase Accounts): الأدوار من حساب المستخدم — لا فحص أجهزة إطلاقاً.
-  if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
-  // دخول بكود المالك أو جلسة محلية صالحة: لا تُسقط الصلاحية المحفوظة من مستند device قديم.
-  if (localStorage.getItem('mdro_device_role') === 'owner' || localStorage.getItem('mdro_device_role') === 'editor' || localStorage.getItem('mdro_device_role') === 'viewer') return;
-  // حتى لو mdro_device_role نزل لـ pending لحظياً — لا نقبل إسقاطاً لدور device
-  // ما دام يوجد آخر حساب سجّل على هذا الجهاز بدور مكتمل (mdro_last_user).
-  var _lu = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
-  if (_lu && (_lu.role === 'owner' || _lu.role === 'editor' || _lu.role === 'viewer')) return;
-  const prevRole = _currentRole;
-  // لا نستخدم checkDeviceAccess عشان متعملش applyRoleUI مرتين
-  try {
-    const { doc, getDoc, db: fdb } = window._fs;
-    const ref = doc(fdb, 'devices', getDeviceId());
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return;
-    const newRole = snap.data().role || 'pending';
-    if (newRole === prevRole) return; // مفيش تغيير
-    _currentRole = newRole;
-    if (newRole === 'blocked') {
-      localStorage.removeItem(SYNC_QUEUE_KEY);
-      localStorage.setItem('mdro_device_role', newRole);
-      doLogout();
-      setTimeout(() => {
-        document.getElementById('loginError').textContent = '🚫 هذا الجهاز محظور. تواصل مع مسؤول النظام.';
-      }, 150);
-    } else if (newRole === 'pending') {
-      // pending — ما نمسحش الطابور، البيانات محفوظة لحين الموافقة
-      localStorage.setItem('mdro_device_role', newRole);
-      applyRoleUI();
-      toast('⏳ تم تغيير صلاحياتك إلى "قيد الانتظار" — البيانات محفوظة');
-    } else if (newRole === 'viewer') {
-      localStorage.removeItem(SYNC_QUEUE_KEY);
-      localStorage.setItem('mdro_device_role', newRole);
-      applyRoleUI();
-      toast('🔄 تم تحديث صلاحياتك — وضع القراءة فقط');
-    } else {
-      // تحسّن الدور — طبّق UI + صرّف طابور المزامنة فوراً
-      localStorage.setItem('mdro_device_role', newRole);
-      applyRoleUI();
-      flushSyncQueue();
-      toast('🔄 تم تحديث صلاحياتك');
-    }
-  } catch(e) { console.warn('periodicRoleCheck:', e); }
+  return; // النظام الجديد يدير الدور عبر MDROAuth — لا فحص أجهزة.
 }
-setInterval(() => periodicRoleCheck(), 10 * 1000); // كل 10 ثواني (يستدعي النسخة المحمية والمحدّثة)
-// تأخير الأول 20 ثانية عشان checkDeviceAccess تخلص أول وتتجنب الـ race condition
-let _roleCheckReady = false;
-setTimeout(() => { _roleCheckReady = true; }, 20000);
-const _origPeriodicRoleCheck = periodicRoleCheck;
-periodicRoleCheck = async function() {
-  if (!_roleCheckReady) return; // في فترة التهيئة
-  // في النظام الجديد (Firebase Accounts) الدور يُدار عبر حساب المستخدم وليس عبر devices —
-  // نتجاوز الفحص القديم كلياً حتى لا يتعارض مع أدوار المستخدمين من MDROAuth.
-  if (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().uid) return;
-  // جلسة محلية صالحة (دخول بكود المالك أو جلسة مدرّجة بلا حساب Firebase) — لا نسمح
-  // لمستند device قديم (دورُه leftover pending/قديم) بإسقاط صلاحية صحيحة.
-  if (localStorage.getItem('mdro_session_active') || localStorage.getItem('mdro_session')) {
-    var _sv = localStorage.getItem('mdro_device_role');
-    if (_sv === 'owner' || _sv === 'editor' || _sv === 'viewer') return;
-  }
-  // آخر حساب سجّل بدور مكتمل (mdro_last_user) هو دليل على صلاحية — لا تُسقط.
-  var _lu2 = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
-  if (_lu2 && (_lu2.role === 'owner' || _lu2.role === 'editor' || _lu2.role === 'viewer')) return;
-  // لا تظهر toast لو الدور لسه هو نفسه في localStorage
-  const saved = localStorage.getItem('mdro_device_role');
-  if (!saved || saved === 'pending') { await _origPeriodicRoleCheck(); return; }
-  // مؤقت: خزّن _currentRole قبل الاستدعاء وبعده لكشف التغيير الوهمي
-  const before = _currentRole;
-  await _origPeriodicRoleCheck();
-  // لو الدور كان فعلاً نفسه في localStorage ما اشتغلناش في الأساس
-};
+setInterval(() => periodicRoleCheck(), 60 * 1000); // محجوز للتوافق — بلا أي أثر
 
 // تطبيق قيود الواجهة حسب الدور
 function applyRoleUI() {
@@ -10009,9 +9927,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Service Worker Registration ──────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js', { scope: './' })
+  navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
     .then(() => console.log('✅ MDRO Service Worker registered'))
     .catch(err => console.warn('SW error:', err));
+
+  // عند تفعيل نسخة SW جديدة والسيطرة على الصفحة — أعد التحويم مرة واحدة
+  // حتى لا تستمر الصفحة الحالية بتشغيل كود قديم مخزّن (كان يسبب مشاكل الصلاحيات).
+  try {
+    var _swR = sessionStorage.getItem('mdro_sw_reloaded');
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (_swR) return;
+      try { sessionStorage.setItem('mdro_sw_reloaded', '1'); } catch {}
+      window.location.reload();
+    });
+  } catch (e) { console.warn('SW controllerchange:', e); }
 }
 
 // ── PWA Install Prompt ────────────────────────────────────────
