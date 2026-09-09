@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // ── Caching ────────────────────────────────────────────────
-const CACHE_VERSION = 'mdro-v183';
+const CACHE_VERSION = 'mdro-v184';
 const CACHE = CACHE_VERSION;
 
 const CORE_FILES = [

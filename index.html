@@ -8862,9 +8862,12 @@ function renderDrawerUser() {
     const m = rmap[role] ? rmap[role] : rmap.pending;
     const esc = (typeof escMDRO === 'function') ? escMDRO : function (x) { return x; };
     const badge = '<span class="role-badge ' + m.cls + '"><span class="rb-ico">' + m.ico + '</span>' + m.label + '</span>';
-    du.innerHTML = (name || email)
-      ? '<span class="du-text">' + esc(name || email) + '</span>' + badge
-      : badge;
+    // نفس فورمات الإداريات: (الاسم أو البريد) ثم ' · ' ثم البريد ثم شارة الدور
+    const seg = [];
+    if (name || email) seg.push(esc(name || email));
+    if (name && email && email !== name) seg.push(esc(email));
+    const line = seg.join(' · ');
+    du.innerHTML = (line ? '<span class="du-text">' + line + '</span>' : '') + badge;
   }
   const hc = document.getElementById('headerOwnerCrown');
   document.body.classList.toggle('is-owner', !!isOwnerUser);
