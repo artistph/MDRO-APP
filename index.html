@@ -1561,16 +1561,6 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
       <button class="btn btn-outline" onclick="switchTab('report')">📊 عرض التقرير</button>
     </div>
   </div>
-
-  <div class="card" id="dataBackupCard">
-    <div class="card-title"><span class="icon">⚙️</span> إدارة البيانات</div>
-    <div class="btn-bar">
-      <button class="btn btn-warn" onclick="exportJSON()">💾 تصدير نسخة احتياطية (JSON)</button>
-      <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📂 استيراد نسخة احتياطية</button>
-      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
-      <button class="btn btn-outline" onclick="showMoveMonthDialog()">📦 نقل بيانات من شهر لآخر</button>
-    </div>
-  </div>
 </div>
 
 <!-- ═══════════════ ENTRY ═══════════════ -->
@@ -2202,7 +2192,7 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
 <!-- ═══════════════ BACKUP TAB (النسخة الاحتياطية) ═══════════════ -->
 <div id="tab-backup" class="tab-content">
   <div class="page-intro">
-    <h2>النسخة الاحتياطية</h2>
+    <h2>النسخة الاحتياطية ونقل البيانات</h2>
     <p>صدّر نسخة كاملة من بيانات التطبيق لملف على جهازك، استوردها لاحقاً، أو انقل بيانات شهر لآخر.</p>
   </div>
   <div class="settings-panel" id="backupPanel">
