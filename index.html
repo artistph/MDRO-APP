@@ -9281,6 +9281,8 @@ function showSettingsPage(n) {
 function openChangePwd() {
   // رسم سطر الحساب في هيدر السايد بار لحظة الفتح (ضمانة مهما كان مسار الدخول)
   if (typeof renderDrawerUser === 'function') renderDrawerUser();
+  // حدّد البند النشط الحالي في القايمة (بنمط تطبيق الإداريات)
+  if (typeof setDrawerActive === 'function') setDrawerActive(window._currentTab || 'home');
   const owner = getOwnerContact();
   const emailEl = document.getElementById('showOwnerEmail');
   const phoneEl = document.getElementById('showOwnerPhone');
@@ -9362,9 +9364,15 @@ function confirmLogout() {
 }
 
 // ── Sidebar Nav ──────────────────────────────────────────────
+function setDrawerActive(name) {
+  document.querySelectorAll('.drawer-nav .drawer-link').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-route') === name);
+  });
+}
 function drawerGo(name) {
   closeChangePwd();
   switchTab(name);
+  if (typeof setDrawerActive === 'function') setDrawerActive(name);
 }
 // ── صفحة الضبط (بنمط صفحة ضبط تطبيق الإداريات) ────────────────
 function renderSettingsPage() {
@@ -10137,10 +10145,10 @@ window.addEventListener('appinstalled', () => {
 
     <!-- قايمة السايد بار -->
     <nav class="drawer-nav">
-      <button class="drawer-link" onclick="drawerGo('home')"><span class="di">🏠</span>الرئيسية</button>
-      <button class="drawer-link" onclick="drawerGo('history')"><span class="di">🗂️</span>الشهور السابقة</button>
-      <button class="drawer-link" onclick="drawerGo('printcenter')"><span class="di">🖨️</span>طباعة الأوراق</button>
-      <button class="drawer-link" onclick="closeChangePwd();openIsoSearch()"><span class="di">🔍</span>البحث</button>
+      <button class="drawer-link active" data-route="home" onclick="drawerGo('home')"><span class="di">🏠</span>الرئيسية</button>
+      <button class="drawer-link" data-route="history" onclick="drawerGo('history')"><span class="di">🗂️</span>الشهور السابقة</button>
+      <button class="drawer-link" data-route="printcenter" onclick="drawerGo('printcenter')"><span class="di">🖨️</span>طباعة الأوراق</button>
+      <button class="drawer-link" data-route="search" onclick="closeChangePwd();openIsoSearch()"><span class="di">🔍</span>البحث</button>
       <div class="drawer-sep"></div>
       <div class="theme-row">
         <span><span class="di">🌙</span> الوضع الليلي</span>
@@ -10150,7 +10158,7 @@ window.addEventListener('appinstalled', () => {
           <span id="darkModeKnob" style="position:absolute;top:3px;right:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 4px rgba(0,0,0,0.2);display:block"></span>
         </label>
       </div>
-      <button class="drawer-link" onclick="drawerGo('settings')"><span class="di">⚙️</span>الإعدادات</button>
+      <button class="drawer-link" data-route="settings" onclick="drawerGo('settings')"><span class="di">⚙️</span>الإعدادات</button>
     </nav>
 
     <button class="drawer-logout" onclick="confirmLogout()">⎋ تسجيل الخروج</button>
