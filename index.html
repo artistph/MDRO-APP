@@ -542,6 +542,11 @@
   .owner-row.stack .or-label { flex: none; padding-bottom: 2px; }
   .owner-row.stack .or-value { flex: none; width: 100%; line-height: 1.55; word-break: break-word; overflow-wrap: anywhere; }
   .owner-row.stack .btn { position: absolute; top: 6px; left: 0; margin: 0; }
+  @media (max-width:520px){
+    .owner-row .or-label{flex:0 0 88px;font-size:11px}
+    .owner-row .or-value{font-size:12px;word-break:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .owner-row .btn{font-size:10px;padding:2px 7px}
+  }
   .owner-edit-box {
     margin-top: 12px; padding: 14px; border-radius: 14px;
     background: var(--input-bg,#f4f7fb); border: 1px solid var(--border,#d0dce8);
