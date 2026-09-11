@@ -1535,7 +1535,7 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="dataBackupCard">
     <div class="card-title"><span class="icon">⚙️</span> إدارة البيانات</div>
     <div class="btn-bar">
       <button class="btn btn-warn" onclick="exportJSON()">💾 تصدير نسخة احتياطية (JSON)</button>
@@ -9374,6 +9374,16 @@ function drawerGo(name) {
   switchTab(name);
   if (typeof setDrawerActive === 'function') setDrawerActive(name);
 }
+// نسخة الاحتياطية موجودة ككارت "إدارة البيانات" في الرئيسية — ننقلك عليه مباشرة
+function drawerGoBackup() {
+  closeChangePwd();
+  switchTab('home');
+  setTimeout(function() {
+    var el = document.getElementById('dataBackupCard');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
+  if (typeof setDrawerActive === 'function') setDrawerActive('backup');
+}
 // ── صفحة الضبط (بنمط صفحة ضبط تطبيق الإداريات) ────────────────
 function renderSettingsPage() {
   const wrap = document.getElementById('mdroSettingsRender');
@@ -10159,6 +10169,7 @@ window.addEventListener('appinstalled', () => {
         </label>
       </div>
       <button class="drawer-link" data-route="settings" onclick="drawerGo('settings')"><span class="di">⚙️</span>الإعدادات</button>
+      <button class="drawer-link" data-route="backup" onclick="drawerGoBackup()"><span class="di">💾</span>النسخة الاحتياطية</button>
     </nav>
 
     <button class="drawer-logout" onclick="confirmLogout()">⎋ تسجيل الخروج</button>
