@@ -528,6 +528,33 @@
   .settings-msg { display: none; margin-top: 11px; padding: 9px 13px; border-radius: 10px; font-size: 13px; font-weight: 600; }
   .settings-msg.ok { display: block; background: #e3f4ea; color: #1b7a48; }
   .settings-msg.err { display: block; background: #fdecea; color: #c0392b; }
+  /* ─── صفحة النسخة الاحتياطية — بنمط تطبيق الإداريات ─── */
+  .page-intro { margin-bottom: 18px; }
+  .page-intro h2 { font-size: 19px; color: var(--text,#1a2535); margin: 0 0 4px; }
+  .page-intro p { font-size: 13px; color: var(--text2,#6b7f96); line-height: 1.7; margin: 0; }
+  .backup-card {
+    display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 14px;
+    border: 1px solid var(--border,#d0dce8); background: var(--row-even,#f7fafd); margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(15,42,74,.05);
+  }
+  .backup-card .bc-ico {
+    font-size: 26px; flex: 0 0 auto;
+    background: linear-gradient(#C9A227,#1B7A78);
+    width: 52px; height: 52px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; box-shadow: 0 4px 12px rgba(27,122,120,.3);
+  }
+  .backup-card > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+  .backup-card h3 { font-size: 15px; color: var(--text,#1a2535); margin: 0 0 4px; }
+  .backup-card p { font-size: 12.5px; color: var(--text2,#6b7f96); line-height: 1.55; margin: 0; }
+  .backup-card .btn { flex: 0 0 auto; }
+  @media(max-width:640px) {
+    .page-intro { margin-bottom: 12px; }
+    .page-intro h2 { font-size: 17px; }
+    .page-intro p { font-size: 12px; }
+    .backup-card { flex-direction: column; align-items: stretch; text-align: right; }
+    .backup-card .btn { align-self: stretch; width: 100%; text-align: center; }
+  }
   .owner-profile {
     border: 1.5px dashed rgba(201,162,39,.55); border-radius: 16px; padding: 14px 16px;
     background: linear-gradient(180deg, rgba(201,162,39,.06), rgba(255,255,255,0));
@@ -2169,6 +2196,36 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
         <div style="font-size:11px;color:var(--text2,#6b7f96);margin-top:3px;line-height:1.5">تصدير بيانات الشهر للتخزين</div>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ═══════════════ BACKUP TAB (النسخة الاحتياطية) ═══════════════ -->
+<div id="tab-backup" class="tab-content">
+  <div class="page-intro">
+    <h2>النسخة الاحتياطية</h2>
+    <p>صدّر نسخة كاملة من بيانات التطبيق لملف على جهازك، أو استوردها لاحقاً على نفس الجهاز أو جهاز آخر.</p>
+  </div>
+  <div class="settings-panel" id="backupPanel">
+    <div class="backup-card">
+      <div class="bc-ico">📤</div>
+      <div>
+        <h3>تصدير نسخة</h3>
+        <p>أنشئ ملف JSON يحتوي كل بياناتك الحالية (كل الشهور والنماذج). يمكنك حفظه أو إرساله لأي جهاز آخر.</p>
+      </div>
+      <button class="btn btn-primary" onclick="exportJSON()">تصدير الآن</button>
+    </div>
+    <div class="backup-card">
+      <div class="bc-ico">📥</div>
+      <div>
+        <h3>استيراد نسخة</h3>
+        <p>اختر ملف نسخة سبق تصديرها. <b style="color:var(--danger)">انتبه: سيستبدل بياناتك الحالية</b> بمحتويات الملف.</p>
+      </div>
+      <label class="btn btn-primary" style="cursor:pointer">
+        اختر ملف
+        <input type="file" id="backupFileInput" accept=".json,application/json" hidden />
+      </label>
+    </div>
+    <div class="settings-msg" id="backupMsg"></div>
   </div>
 </div>
 
@@ -8379,31 +8436,42 @@ function exportJSON() {
   downloadBlob(blob, `نسخة_احتياطية_MDRO_${currentYear}.json`);
 }
 
+function importJSONFromFile(file) {
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const obj = JSON.parse(e.target.result);
+        if (!obj || typeof obj.data !== 'object' || obj.data === null) { reject(new Error('ملف غير صالح — ليس نسخة احتياطية من التطبيق.')); return; }
+        const year = obj.year || currentYear;
+        let count = 0;
+        Object.entries(obj.data || {}).forEach(([monthName, d]) => {
+          const mi = MONTHS.indexOf(monthName);
+          if (mi < 0) return;
+          if (d.cases) { saveCases(year, mi, d.cases); count += d.cases.length; }
+          if (d.iso_profiles) { saveIsoProfiles(year, mi, d.iso_profiles); count++; }
+          if (d.stay) { saveStayData(year, mi, d.stay); count++; }
+          if (d.iso) { saveIsoData(year, mi, d.iso); count++; }
+          if (d.incomplete) { saveIncompleteCases(year, mi, d.incomplete); count += d.incomplete.length; }
+        });
+        currentYear = year;
+        resolve({ year: year, count: count });
+      } catch { reject(new Error('الملف ليس بصيغة JSON صحيحة.')); }
+    };
+    reader.onerror = () => reject(new Error('تعذر قراءة الملف.'));
+    reader.readAsText(file);
+  });
+}
+
 function importJSON(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const obj = JSON.parse(e.target.result);
-      const year = obj.year || currentYear;
-      Object.entries(obj.data || {}).forEach(([monthName, d]) => {
-        const mi = MONTHS.indexOf(monthName);
-        if (mi < 0) return;
-        if (d.cases) saveCases(year, mi, d.cases);
-        if (d.iso_profiles) saveIsoProfiles(year, mi, d.iso_profiles);
-        if (d.stay) saveStayData(year, mi, d.stay);
-        if (d.iso) saveIsoData(year, mi, d.iso);
-        if (d.incomplete) saveIncompleteCases(year, mi, d.incomplete);
-      });
-      currentYear = year;
-      buildMonthGrid();
-      refreshCaseList();
-      refreshReport();
-      toast('تم استيراد البيانات بنجاح ✅');
-    } catch { toast('⚠️ خطأ في الملف'); }
-  };
-  reader.readAsText(file);
+  importJSONFromFile(file).then(() => {
+    buildMonthGrid();
+    refreshCaseList();
+    refreshReport();
+    toast('تم استيراد البيانات بنجاح ✅');
+  }).catch(err => toast(err.message || '⚠️ خطأ في الملف'));
   event.target.value = '';
 }
 
@@ -8616,6 +8684,7 @@ function switchTab(name) {
   if (name === 'history') refreshHistory();
   if (name === 'printcenter') renderPrintCenter();
   if (name === 'settings') renderSettingsPage();
+  if (name === 'backup') renderBackupPage();
   window._currentTab = name;
   localStorage.setItem('mdro_last_tab', name);
   window.scrollTo(0, 0);
@@ -9385,16 +9454,6 @@ function drawerGo(name) {
   switchTab(name);
   if (typeof setDrawerActive === 'function') setDrawerActive(name);
 }
-// نسخة الاحتياطية موجودة ككارت "إدارة البيانات" في الرئيسية — ننقلك عليه مباشرة
-function drawerGoBackup() {
-  closeChangePwd();
-  switchTab('home');
-  setTimeout(function() {
-    var el = document.getElementById('dataBackupCard');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 150);
-  if (typeof setDrawerActive === 'function') setDrawerActive('backup');
-}
 // ── صفحة الضبط (بنمط صفحة ضبط تطبيق الإداريات) ────────────────
 function renderSettingsPage() {
   const wrap = document.getElementById('mdroSettingsRender');
@@ -9418,6 +9477,31 @@ function renderSettingsPage() {
     '</div>';
   renderAboutQr();
   if (typeof renderMDROUserManager === 'function') renderMDROUserManager();
+}
+
+// ── صفحة النسخة الاحتياطية — بنمط صفحة النسخة في تطبيق الإداريات ──
+function renderBackupPage() {
+  const input = document.getElementById('backupFileInput');
+  if (input && !input.dataset.wired) {
+    input.dataset.wired = '1';
+    input.addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      const msg = document.getElementById('backupMsg');
+      if (!file) return;
+      if (msg) { msg.className = 'settings-msg'; msg.textContent = '...جارٍ الاستيراد'; }
+      importJSONFromFile(file).then(function(r) {
+        buildMonthGrid();
+        refreshCaseList();
+        refreshReport();
+        if (msg) { msg.className = 'settings-msg ok'; msg.textContent = 'تم استيراد ' + r.count + ' عنصر بنجاح. أعد فتح التطبيق لرؤية البيانات. ✓'; }
+      }).catch(function(err) {
+        if (msg) { msg.className = 'settings-msg err'; msg.textContent = err.message || '⚠️ خطأ في الملف'; }
+      });
+      if (input) input.value = '';
+    });
+  }
+  const msg = document.getElementById('backupMsg');
+  if (msg) { msg.className = 'settings-msg'; msg.textContent = ''; }
 }
 
 // ── عن التطبيق (باركود التثبيت) ─────────────────────────────
@@ -10180,7 +10264,7 @@ window.addEventListener('appinstalled', () => {
         </label>
       </div>
       <button class="drawer-link" data-route="settings" onclick="drawerGo('settings')"><span class="di">⚙️</span>الإعدادات</button>
-      <button class="drawer-link" data-route="backup" onclick="drawerGoBackup()"><span class="di">💾</span>النسخة الاحتياطية</button>
+      <button class="drawer-link" data-route="backup" onclick="drawerGo('backup')"><span class="di">💾</span>النسخة الاحتياطية</button>
     </nav>
 
     <button class="drawer-logout" onclick="confirmLogout()">⎋ تسجيل الخروج</button>
