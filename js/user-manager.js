@@ -39,6 +39,19 @@ async function renderMDROUserManager() {
       }
     } catch {}
   }
+  // شفاء ذاتي: لو ما زال فارغاً — نأخذ اسم/بريد المالك الحقيقي من Firestore
+  // مباشرة حتى لا يظهر قالب بيانات المالك فارغاً (الكاش المحلي قد يكون قديماً).
+  if (!dispName || !dispEmail) {
+    try {
+      const hid = await window.MDROAuth.getOwnerIdentFromBootstrap();
+      if (hid) {
+        if (!dispName) dispName = hid.name || '';
+        if (!dispEmail) dispEmail = hid.email || '';
+      }
+    } catch {}
+  }
+  // حدّث الجلسة نفسها ليتعافى سطر السايد بار أيضاً.
+  try { window.MDROAuth.ensureOwnerIdent(); } catch {}
   wrap.innerHTML =
     '<h3>الحساب الخاص بي <span style="font-size:11px;color:#C9A227;font-weight:700">(👑 المالك)</span></h3>' +
     '<div class="owner-profile">' +

@@ -8799,10 +8799,22 @@ function renderDrawerUser() {
   const isOwnerUser = (role === 'owner');
 
   // لو معندناش اسم/بريد جاهز والمستخدم مالك — خد من جهة اتصال المالك المحفوظة
-  if (!email && role === 'owner') {
-    try { const oc = getOwnerContact(); if (oc && oc.email) email = oc.email; } catch {}
+  if ((!name || !email) && role === 'owner') {
+    try { const oc = getOwnerContact(); if (oc) { if (!name) name = oc.name || ''; if (!email) email = oc.email || ''; } } catch {}
   }
   if (!name && !email && role === 'owner' && !gotUser) name = 'المالك';
+  // شفاء ذاتي: الدور مالك والاسم/البريد فارغين — نعيد جلبهما من Firestore
+  // (bootstrap/owner → users/{uid}) ونعيد الرسم فور توافرهما.
+  if (role === 'owner' && (!name || !email)) {
+    var _hid_ = (window.MDROAuth && window.MDROAuth.ensureOwnerIdent) ? window.MDROAuth.ensureOwnerIdent() : null;
+    if (_hid_ && typeof _hid_.then === 'function') {
+      _hid_.then(function(acc) {
+        if (acc && acc.name && acc.email && (typeof applyRoleUI === 'function')) {
+          try { applyRoleUI(); } catch {}
+        }
+      });
+    }
+  }
 
   const du = document.getElementById('drawerUser');
   if (du) {

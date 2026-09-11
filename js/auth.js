@@ -393,6 +393,10 @@ window.MDROAuth = (function () {
       cacheSession(prev);
       if (emailChanged) { try { sessionStorage.setItem('mdro_display_email', newEmail); } catch {} }
     }
+    // حافظ على جهة اتصال المالك محدّثة بعد أي تعديل على بياناته
+    try {
+      localStorage.setItem('mdro_owner_contact', JSON.stringify({ name: currentUser.name, email: currentUser.email, phone: '' }));
+    } catch {}
     return { ok: true, msg: 'تم تحديث حسابك ✓' };
   }
 
@@ -437,27 +441,82 @@ window.MDROAuth = (function () {
     return currentUser;
   }
 
-  /** نسخة من جلسة كود المالك مبنية على اسم/بريد المالك الحقيقي من Firestore
-   *  (bootstrap/owner → users/{uid}) حتى لا يظهر سطر الحساب أو قالب بيانات
-   *  المالك فارغاً عند الدخول بكود المالك. */
-  async function setLocalOwnerSessionFromBootstrap() {
+  /** مصدر الحقيقة لاسم/بريد المالك: bootstrap/owner → users/{uid} من Firestore،
+   *  مع تدرّج احتياطي (آخر حساب مالك معروف، ثم جهة الاتصال المحفوظة).
+   *  يخزّن النتيجة دائماً في mdro_owner_contact لتعتمد عليها كل طبقات العرض. */
+  async function getOwnerIdentFromBootstrap() {
     let name = '', email = '';
     try {
       const bs = await loadBootstrapOwner();
       const by = (bs && bs.by) ? bs.by : null;
       if (by) {
-        const d = await fetchUser(by);
+        const d = await fetchUserWithRetry(by);
         if (d) { name = d.name || ''; email = d.email || d.authEmail || ''; }
       }
     } catch {}
-    if (!name && !email) {
+    if (!name || !email) {
       try {
-        const lr = localStorage.getItem('mdro_last_user');
-        const c = lr ? JSON.parse(lr) : null;
-        if (c && c.role === 'owner') { if (!name) name = c.name || ''; if (!email) email = c.email || ''; }
+        const lu = JSON.parse(localStorage.getItem('mdro_last_user') || 'null');
+        if (lu && lu.role === 'owner') { if (!name) name = lu.name || ''; if (!email) email = lu.email || ''; }
       } catch {}
     }
-    return setLocalSession({ uid: 'owner-code-local', name, email, role: 'owner' });
+    if (!name || !email) {
+      try {
+        const oc = JSON.parse(localStorage.getItem('mdro_owner_contact') || 'null');
+        if (oc) { if (!name) name = oc.name || ''; if (!email) email = oc.email || ''; }
+      } catch {}
+    }
+    if (name || email) {
+      try { localStorage.setItem('mdro_owner_contact', JSON.stringify({ name: name, email: email, phone: '', at: Date.now() })); } catch {}
+    }
+    return { name, email };
+  }
+
+  let _ownerHydratePromise = null;
+  /** شفاء ذاتي لهوية المالك: لو الجلسة الحية فاضية الاسم/البريد — نحضّرها من
+   *  Firestore ونعيد رسم الواجهة حتى لا يفرغ سطر السايد بار أو قالب الحساب،
+   *  حتى مع كاش محلي "مسموم" من جلسات قديمة. */
+  async function ensureOwnerIdent() {
+    if (!(window._currentRole === 'owner')) return currentUser || null;
+    const cur = currentUser;
+    if (cur && cur.name && cur.email) return cur;
+    if (!_ownerHydratePromise) {
+      _ownerHydratePromise = (async () => {
+        try {
+          const hid = await getOwnerIdentFromBootstrap();
+          let changed = false;
+          if (currentUser) {
+            const nm = hid.name || currentUser.name || '';
+            const em = hid.email || currentUser.email || '';
+            if (nm !== currentUser.name || em !== currentUser.email) {
+              currentUser = { uid: currentUser.uid, email: em, name: nm, role: currentUser.role };
+              cacheSession(currentUser);
+              changed = true;
+            }
+          } else if (hid.name || hid.email) {
+            currentUser = { uid: 'owner-code-local', name: hid.name || '', email: hid.email || '', role: 'owner' };
+            cacheSession(currentUser);
+            changed = true;
+          }
+          if (changed) {
+            try {
+              if (typeof window.applyRoleUI === 'function') window.applyRoleUI();
+              else if (typeof window.renderDrawerUser === 'function') window.renderDrawerUser();
+            } catch {}
+          }
+        } finally {
+          _ownerHydratePromise = null;
+        }
+      })();
+    }
+    return _ownerHydratePromise;
+  }
+
+  /** نسخة من جلسة كود المالك مبنية على اسم/بريد المالك الحقيقي من Firestore
+   *  حتى لا يظهر سطر الحساب أو قالب بيانات المالك فارغاً عند الدخول بكود المالك. */
+  async function setLocalOwnerSessionFromBootstrap() {
+    const hid = await getOwnerIdentFromBootstrap();
+    return setLocalSession({ uid: 'owner-code-local', name: hid.name || '', email: hid.email || '', role: 'owner' });
   }
 
   /* ---------- استرجاع جلسة سابقة / onAuthStateChanged ---------- */
@@ -488,6 +547,9 @@ window.MDROAuth = (function () {
               ensureOwnerCode();
               closeBootstrapIfNeeded();
             }
+            // شفاء ذاتي: لو مستند المستخدم فشل جلبه لحظياً (شبكة) فبقي الاسم/البريد
+            // فارغين — نملأهما من مصدر المالك الحقيقي فوراً.
+            if (role === 'owner' && (!name || !email)) ensureOwnerIdent();
           });
         } else {
           const cached = cachedSession();
@@ -501,6 +563,9 @@ window.MDROAuth = (function () {
             currentUser = { uid: cached.uid, email: cached.email, name: cached.name, role: cached.role };
             _setLocalRole(currentUser.role);
             if (typeof callback === 'function') callback(true, { offline: true });
+            // شفاء ذاتي: استعادة جلسة قديمة بلا اسم/بريد (كاش مسموم من جلسات
+            // كود المالك الأولى) — نحضّر من Firestore ونعيد الرسم.
+            if (currentUser.role === 'owner' && (!currentUser.name || !currentUser.email)) ensureOwnerIdent();
           } else {
             currentUser = null;
             _setLocalRole('pending');
@@ -515,7 +580,8 @@ window.MDROAuth = (function () {
     currentUser, login, logout, isLoggedIn, get, canEdit, canPrint, canManageUsers,
     listUsers, createUser, setRole, deleteUser, updateUserData, updateOwnerAccount,
     verifyOwnerCode, setOwnerCode, ensureOwnerCode, fetchUser, closeBootstrapIfNeeded,
-    setLocalSession, setLocalOwnerSessionFromBootstrap, initSessionListener, errorMsg, cachedSession, cacheSession,
+    setLocalSession, setLocalOwnerSessionFromBootstrap, getOwnerIdentFromBootstrap, ensureOwnerIdent,
+    initSessionListener, errorMsg, cachedSession, cacheSession,
   };
 })();
 
