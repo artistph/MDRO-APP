@@ -9360,7 +9360,18 @@ function closeChangePwd() {
 }
 function confirmLogout() {
   closeChangePwd();
-  document.getElementById('logoutConfirmOverlay').style.display = 'flex';
+  var overlay = document.getElementById('logoutConfirmOverlay');
+  if (overlay) overlay.style.display = 'flex';
+  setTimeout(function() {
+    var d = document.getElementById('logoutDialog');
+    if (d) { d.style.transform = 'scale(1)'; d.style.opacity = '1'; }
+  }, 15);
+}
+function closeLogoutConfirm() {
+  var d = document.getElementById('logoutDialog');
+  var ov = document.getElementById('logoutConfirmOverlay');
+  if (d) { d.style.transform = 'scale(.92)'; d.style.opacity = '0'; }
+  setTimeout(function() { if (ov) ov.style.display = 'none'; }, 230);
 }
 
 // ── Sidebar Nav ──────────────────────────────────────────────
@@ -10193,11 +10204,16 @@ window.addEventListener('appinstalled', () => {
 </div>
 
 <!-- ═══════════════ LOGOUT CONFIRM ═══════════════ -->
-<div id="logoutConfirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:320;align-items:center;justify-content:center">
-  <div style="background:var(--card,#fff);border-radius:16px;padding:24px;width:80%;max-width:280px;direction:rtl;font-family:'Cairo',sans-serif;text-align:center;color:var(--text,#1a2535);border:1px solid var(--border,#d0dce8)">
-    <div style="display:flex;gap:8px">
-      <button onclick="document.getElementById('logoutConfirmOverlay').style.display='none'" style="flex:1;background:var(--row-even,#f0f4f8);color:var(--text2,#6b7f96);border:1px solid var(--border,#d0dce8);border-radius:10px;padding:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">إلغاء</button>
-      <button onclick="doLogout()" style="flex:1;background:#c0392b;color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">خروج</button>
+<div id="logoutConfirmOverlay" style="display:none;position:fixed;inset:0;background:rgba(7,20,42,.65);backdrop-filter:blur(3px);z-index:320;align-items:center;justify-content:center">
+  <div id="logoutDialog" style="background:var(--card,#fff);border-radius:20px;padding:28px 24px 22px;width:86%;max-width:320px;direction:rtl;font-family:'Cairo',sans-serif;color:var(--text,#1a2535);text-align:center;border:1.5px solid var(--border,#d0dce8);box-shadow:0 8px 32px rgba(0,0,0,.18);transform:scale(.92);opacity:0;transition:transform .22s cubic-bezier(.34,1.56,.64,1),opacity .18s">
+    <div style="width:56px;height:56px;border-radius:50%;background:rgba(192,57,43,.1);margin:0 auto 14px;display:flex;align-items:center;justify-content:center">
+      <span style="font-size:26px">🚪</span>
+    </div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:4px">تسجيل الخروج</div>
+    <div style="font-size:13px;color:var(--text2,#6b7f96);line-height:1.55;margin-bottom:18px">هل تريد تسجيل الخروج من حسابك؟<br>سيُطلب منك إعادة الدخول للوصول للبيانات مجدداً.</div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeLogoutConfirm()" style="flex:1 1 0;background:var(--row-even,#f0f4f8);color:var(--text,#1a2535);border:1.5px solid var(--border,#d0dce8);border-radius:10px;padding:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#e2eaf0'" onmouseout="this.style.background='var(--row-even,#f0f4f8)'">إلغاء</button>
+      <button onclick="doLogout()" style="flex:1 1 0;background:#c0392b;color:#fff;border:none;border-radius:10px;padding:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s" onmouseover="this.style.background='#a83229'" onmouseout="this.style.background='#c0392b'">خروج</button>
     </div>
   </div>
 </div>
