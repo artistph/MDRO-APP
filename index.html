@@ -2203,7 +2203,7 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
 <div id="tab-backup" class="tab-content">
   <div class="page-intro">
     <h2>النسخة الاحتياطية</h2>
-    <p>صدّر نسخة كاملة من بيانات التطبيق لملف على جهازك، أو استوردها لاحقاً على نفس الجهاز أو جهاز آخر.</p>
+    <p>صدّر نسخة كاملة من بيانات التطبيق لملف على جهازك، استوردها لاحقاً، أو انقل بيانات شهر لآخر.</p>
   </div>
   <div class="settings-panel" id="backupPanel">
     <div class="backup-card">
@@ -2224,6 +2224,14 @@ setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth �
         اختر ملف
         <input type="file" id="backupFileInput" accept=".json,application/json" hidden />
       </label>
+    </div>
+    <div class="backup-card">
+      <div class="bc-ico">📦</div>
+      <div>
+        <h3>نقل بيانات من شهر لآخر</h3>
+        <p>انقل أو ادمج بيانات شهر كامل (الحالات ومزارع العزل وأيام الإقامة والناقص) إلى شهر آخر.</p>
+      </div>
+      <button class="btn btn-outline" onclick="showMoveMonthDialog()">📦 نقل البيانات</button>
     </div>
     <div class="settings-msg" id="backupMsg"></div>
   </div>
@@ -10264,7 +10272,7 @@ window.addEventListener('appinstalled', () => {
         </label>
       </div>
       <button class="drawer-link" data-route="settings" onclick="drawerGo('settings')"><span class="di">⚙️</span>الإعدادات</button>
-      <button class="drawer-link" data-route="backup" onclick="drawerGo('backup')"><span class="di">💾</span>النسخة الاحتياطية</button>
+      <button class="drawer-link" data-route="backup" onclick="drawerGo('backup')"><span class="di">💾</span>النسخة الاحتياطية ونقل البيانات</button>
     </nav>
 
     <button class="drawer-logout" onclick="confirmLogout()">⎋ تسجيل الخروج</button>
