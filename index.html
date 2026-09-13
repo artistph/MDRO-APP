@@ -1211,6 +1211,11 @@ window.MDRo_Sync_stop = window.MDRo_Sync_stop || function(){};
           if (ls && st) { ls.style.display = 'none'; }
           // طبق الدور الحقيقي فور عودته حتى لا تظهر واجهة "المعاينة" مؤقتاً
           if (typeof applyRoleUI === 'function') applyRoleUI();
+          // ادفع الطابور المحلي أولاً ثم اسحب — حتى لا تُستبدل بيانات الجهاز الأحدث
+          try {
+            if (typeof flushSyncQueue === 'function') flushSyncQueue();
+            if (typeof schedulePull === 'function') schedulePull(200);
+          } catch(e) {}
         }
       });
     }
@@ -1233,19 +1238,32 @@ let db = null;
 let isOnline = navigator.onLine;
 const SYNC_QUEUE_KEY = 'mdro_sync_queue';
 
+// المزامنة تعمل فقط بجلسة مستخدم حقيقية (Firebase Auth عبر dbCompat) — لأن
+// قواعد Firestore (canWrite) ترفض أي كاتب غير مسجّل في users/{uid}.
+// لو مفيش جلسة حقيقية (قبل الدخول / كود المالك المحلي) تُحفظ البيانات في
+// الطابور ولا تُرفع حتى لا تضيع أبداً.
+function isRealSyncSession() {
+  try {
+    const u = window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get();
+    return !!(u && u.uid && u.role !== 'pending');
+  } catch { return false; }
+}
+
 async function initFirebase() {
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js");
     const { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } = 
       await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js");
-    const { getAuth, signInAnonymously, onAuthStateChanged } =
+    const { getAuth, signInAnonymously } =
       await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js");
     const app = initializeApp(FIREBASE_CONFIG);
     window._firebaseApp = app; // مرجع للـ app عشان FCM
     db = getFirestore(app);
     window._fs = { doc, setDoc, getDoc, collection, getDocs, deleteDoc, db };
 
-    // Anonymous Auth — في الخلفية، المستخدم مش حاسس بحاجة
+    // Anonymous Auth — للقراءة العامة فقط (secrets).
+    // المزامنة (دفع/سحب mdro_data) لا تعمل إلا بجلسة المستخدم الحقيقي عبر
+    // dbCompat — لأن Firestore Rules تتطلب canWrite() لأي كتابة في mdro_data.
     const auth = getAuth(app);
     await signInAnonymously(auth).catch(e => console.warn('Auth:', e));
 
@@ -1258,25 +1276,31 @@ async function initFirebase() {
     } catch(e) { console.warn('Secrets:', e); }
 
     updateSyncBadge();
-    if (isOnline) {
-      await pullFromCloud();
-      // flushSyncQueue يُستدعى لاحقاً بعد checkSession/doLogin لما يتحدد الدور
-    }
+    // لا نسحب هنا إطلاقاً — السحب يتم عبر dbCompat وفقط بعد دخول المستخدم
+    // الحقيقي، وبعد دفع الطابور أولاً حتى لا تُستبدل بيانات الجهاز الأحدث
+    // ببيانات قديمة عالقة في السحابة (نسخ أعلى لكن زمنياً أقدم).
   } catch(e) { console.warn('Firebase:', e); }
 }
 
-async function pushToCloud(key, data) {
-  // أوفلاين — دايمًا احط في الطابور
-  if (!db || !isOnline) { addToQueue(key, data); return; }
+async function pushToCloud(key, data, localTs) {
+  // بدون جلسة حقيقية أو أوفلاين — دايمًا احط في الطابور (لا تضيع بيانات)
+  if (!dbCompat || !isOnline || !isRealSyncSession()) { addToQueue(key, data, localTs); return false; }
   // أونلاين — لو مفيش صلاحية متدفعش للكلود (pending يحطه في الطابور لحين الموافقة)
-  if (_currentRole === 'blocked') return;
-  if (_currentRole === 'viewer' || _currentRole === 'pending') { addToQueue(key, data); return; }
+  if (_currentRole === 'blocked') return false;
+  if (_currentRole === 'viewer' || _currentRole === 'pending') { addToQueue(key, data, localTs); return false; }
+  const ts = localTs || Date.now();
   try {
-    const { doc, setDoc, db: fdb } = window._fs;
-    const ts = Date.now();
+    // الكتابة عبر dbCompat (جلسة المستخدم الحقيقي) — يقبلها Firestore Rules
+    const ref = dbCompat.collection('mdro_data').doc(key.replace('mdro_',''));
+    // اقرأ النسخة السحابية الحالية لتجنب الكتابة فوق بيانات أحدث زمنياً
+    const existSnap = await ref.get().catch(() => null);
+    const cloudDoc = existSnap && existSnap.exists ? existSnap.data() : null;
+    const cloudTs = cloudDoc ? (cloudDoc.updatedAt || 0) : 0;
+    if (localTs && cloudTs && cloudTs > localTs) return true; // سحابة أحدث — لا تلمس وانتهت حاجة الطابور
+    const cloudVer = cloudDoc ? (cloudDoc.version || 0) : 0;
     const syncTsMap = tryParse(localStorage.getItem('mdro_sync_ts')) || {};
-    const nextVer = (syncTsMap[key + '_ver'] || 0) + 1;
-    await setDoc(doc(fdb, 'mdro_data', key.replace('mdro_','')), {
+    const nextVer = Math.max(syncTsMap[key + '_ver'] || 0, cloudVer) + 1;
+    await ref.set({
       data: JSON.stringify(data),
       version: nextVer,
       updatedAt: ts
@@ -1285,14 +1309,14 @@ async function pushToCloud(key, data) {
     syncTsMap[key] = ts;
     localStorage.setItem('mdro_sync_ts', JSON.stringify(syncTsMap));
     schedulePull();
-  } catch(e) { addToQueue(key, data); }
+    return true;
+  } catch(e) { addToQueue(key, data, localTs); return false; }
 }
 
 async function pullFromCloud() {
-  if (!db || !isOnline) return;
+  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
   try {
-    const { collection, getDocs, db: fdb } = window._fs;
-    const snap = await getDocs(collection(fdb, 'mdro_data'));
+    const snap = await dbCompat.collection('mdro_data').get();
     let n = 0;
     const syncTsMap = tryParse(localStorage.getItem('mdro_sync_ts')) || {};
     const isFirstRun = !localStorage.getItem('mdro_initialized');
@@ -1304,27 +1328,44 @@ async function pullFromCloud() {
       const key = 'mdro_' + d.id;
       const cloud = d.data();
       const cloudVer = cloud.version || 0;
+      const cloudTs = cloud.updatedAt || 0;
       const localVer = syncTsMap[key + '_ver'] || 0;
+      const localTs = syncTsMap[key] || 0;
 
       if (localVer === -1) return; // اتمسح عمدًا من هذا الجهاز — مينزلش
+
+      const hasLocal = localStorage.getItem(key) !== null;
+      const localData = hasLocal ? tryParse(localStorage.getItem(key)) : null;
+
+      // حماية حاسمة: بيانات محلية غير متزامنة أصلاً (Version=0) — المحلي هو
+      // عمل هذا الجهاز الأحدث فعلياً (أدخل بعد توقف المزامنة) — لا تستبدله
+      // بالسحابة الثابتة، ادفعه أولاً ثم راجع السحابة بعد أن ترتفع نسخته.
+      if (hasLocal && localData !== null && !localTs && localVer === 0) {
+        pushToCloud(key, localData, Date.now());
+        n++;
+        return;
+      }
 
       if (isFirstRun) {
         // أول تشغيل على هذا الجهاز — حمل كل حاجة من السحابة
         localStorage.setItem(key, cloud.data);
         syncTsMap[key + '_ver'] = cloudVer;
-        syncTsMap[key] = cloud.updatedAt || Date.now();
+        syncTsMap[key] = cloudTs || Date.now();
+        n++;
+      } else if (localTs && cloudTs && localTs > cloudTs && localVer !== 0) {
+        // المحلي أحدث زمنياً رغم أن عداد النسخة أقل (بيانات قديمة عالقة) — ادفعها
+        if (localData !== null) pushToCloud(key, localData, localTs);
         n++;
       } else if (cloudVer > localVer) {
-        // السحابة أحدث — نزل المحلي
+        // السحابة أحدث — نزل المحلي (الأحدث زمنياً ورقمياً)
         localStorage.setItem(key, cloud.data);
         syncTsMap[key + '_ver'] = cloudVer;
-        syncTsMap[key] = cloud.updatedAt || Date.now();
+        syncTsMap[key] = cloudTs || Date.now();
         n++;
       } else if (cloudVer > 0 && cloudVer < localVer) {
         // المحلي أحدث — ارفع للسحابة
-        const localData = tryParse(localStorage.getItem(key));
         if (localData !== null) {
-          pushToCloud(key, localData);
+          pushToCloud(key, localData, localTs || Date.now());
         }
       }
     });
@@ -1363,45 +1404,45 @@ async function pullFromCloud() {
 
 // سلسلة وعود لتسلسل كتابة الطابور ومنع السباق
 let _queueChain = Promise.resolve();
-function addToQueue(key, data) {
+function addToQueue(key, data, localTs) {
   _queueChain = _queueChain.then(() => {
     const q = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
-    q[key] = { data, ts: Date.now() };
+    // نحافظ على أول ts (لحظة الإنشاء) إن وجد — لترتيب الأولوية الزمني الصحيح
+    q[key] = { data, ts: (q[key] && q[key].ts) || localTs || Date.now() };
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q));
   });
 }
 
 async function _flushPendingManifest() {
-  if (!db || !isOnline) return;
+  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
   const manifest = tryParse(localStorage.getItem(DEL_MANIFEST_KEY));
   if (!manifest || !Array.isArray(manifest.keys) || manifest.keys.length === 0) return;
-  const { doc, setDoc, deleteDoc, db: fdb } = window._fs || {};
-  if (!fdb) return;
   await Promise.allSettled(manifest.keys.map(k =>
-    deleteDoc(doc(fdb, 'mdro_data', k.replace('mdro_','')))
+    dbCompat.collection('mdro_data').doc(k.replace('mdro_','')).delete()
   ));
-  await setDoc(doc(fdb, 'mdro_data', '_deletions_manifest'), manifest).catch(() => {});
+  await dbCompat.collection('mdro_data').doc('_deletions_manifest').set(manifest).catch(() => {});
   localStorage.removeItem(DEL_MANIFEST_KEY);
   schedulePull();
 }
 
 async function flushSyncQueue() {
-  if (!db || !isOnline) return;
+  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
   const keys = Object.keys(tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {});
   for (const k of keys) {
     try {
-      // نقرأ الطابور قبل الدفع عشان نحصل على الـ timestamp
+      // نقرأ الطابور قبل الدفع عشان نحصل على الـ timestamp الأصلي
       const before = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
       if (!before[k]) continue;
-      const data = before[k].data;
-      const prevTs = before[k].ts;
-      await pushToCloud(k, tryParse(data) || data);
-      // بعد الدفع نقرا الطابور تاني: لو الـ timestamp اتغير يبقى pushToCloud
-      // استدعت addToQueue (مثلاً لو الدور pending) — نحتفظ بالمفتاح
-      const after = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
-      if (after[k] && after[k].ts === prevTs) delete after[k];
-      localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(after));
-    } catch(e) { /* الخطأ سكت — pushToCloud أخد باله */ }
+      const item = before[k];
+      const localTs = item.ts || Date.now();
+      const ok = await pushToCloud(k, tryParse(item.data) || item.data, localTs);
+      // pushToCloud يرجع true إذا وصلت للسحابة أو تبيّن أن السحابة أحدث (انتهت حكمتها)
+      if (ok) {
+        const after = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
+        delete after[k];
+        localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(after));
+      }
+    } catch(e) { /* يبقى في الطابور أبداً — لا حذف */ }
   }
 }
 
@@ -1431,16 +1472,16 @@ function schedulePull(ms=1200) {
   _pullPending = true;
   setTimeout(() => {
     _pullPending = false;
-    if (_pullLock || !db || !isOnline || _currentRole === 'blocked') return;
+    if (_pullLock || !dbCompat || !isOnline || _currentRole === 'blocked' || !isRealSyncSession()) return;
     _pullLock = true;
     pullFromCloud().finally(() => { _pullLock = false; });
   }, ms);
 }
 setInterval(async () => {
-  if (_pullLock || !db || !isOnline || _currentRole === 'blocked') return;
+  if (_pullLock || !dbCompat || !isOnline || _currentRole === 'blocked' || !isRealSyncSession()) return;
   _pullLock = true;
   try {
-    if (isEditor()) await flushSyncQueue(); // يصرف الطابور لو في بيانات محفوظة
+    if (isEditor()) await flushSyncQueue(); // يصرف الطابور (دفع المحلي أولاً) ثم سحب
     await pullFromCloud();
   } finally { _pullLock = false; }
 }, 5000);
@@ -1449,16 +1490,10 @@ setInterval(async () => {
 setInterval(() => {
   const wasOffline = !isOnline;
   isOnline = navigator.onLine;
-  if (wasOffline && isOnline && db) {
-    // فاتنا event online — نزامن دلوقتي
-    checkDeviceAccess().then(role => {
-      if (role === 'viewer' || role === 'blocked') {
-        localStorage.removeItem(SYNC_QUEUE_KEY);
-      } else if (isEditor()) {
-        flushSyncQueue();
-        schedulePull(200);
-      }
-    });
+  if (wasOffline && isOnline && dbCompat && isRealSyncSession()) {
+    // فاتنا event online — نزامن دلوقتي: دفع أولاً ثم سحب
+    flushSyncQueue();
+    schedulePull(200);
   }
   updateSyncBadge();
 }, 3000);
@@ -1474,26 +1509,25 @@ function updateSyncBadge() {
 window.addEventListener('online', async () => {
   isOnline = true;
   updateSyncBadge();
-  if (!db) {
+  if (!db || !dbCompat) {
     await initFirebase();
     updateSyncBadge();
   }
-  // دايماً نتأكد من الصلاحية من Firestore أول — سريع (قراية وحدة)
-  const role = await checkDeviceAccess();
-  if (role === 'viewer' || role === 'blocked') {
-    localStorage.removeItem(SYNC_QUEUE_KEY);
-    toast('📴 لا مزامنة — صلاحياتك تغيرت');
-  } else if (role === 'pending') {
-    toast('⏳ جهازك في انتظار الموافقة — البيانات محفوظة وستتزامن بعد التفعيل');
-  } else if (isEditor()) {
-    await flushSyncQueue();
+  if (!isRealSyncSession()) {
+    toast('🌐 متصل — سجّل الدخول لمزامنة البيانات');
+    return;
+  }
+  if (_currentRole === 'blocked') { toast('📴 لا مزامنة — صلاحياتك تغيرت'); return; }
+  if (_currentRole === 'pending') { toast('⏳ جهازك في انتظار الموافقة — البيانات محفوظة وستتزامن بعد التفعيل'); return; }
+  if (isEditor()) {
+    await flushSyncQueue(); // دفع المحلي أولاً
     schedulePull(200); // اسحب فوراً بعد ما ترجع النت
     toast('🌐 متصل – جاري المزامنة');
   }
 });
 window.addEventListener('offline', () => { isOnline=false; updateSyncBadge(); toast('📴 أوفلاين – يحفظ محلياً'); });
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && db && isOnline) schedulePull(300);
+  if (!document.hidden && dbCompat && isOnline && isRealSyncSession()) schedulePull(300);
 });
 
 // تحقق دوري قديم (نظام الأجهزة) — أُلغي نهائياً: الحسابات عبر Firebase،
@@ -8701,7 +8735,6 @@ function toast(msg) {
 // ════════════════════════════════════════════
 // AUTH SYSTEM
 // ════════════════════════════════════════════
-const DEFAULT_CREDS = { user: 'admin', pass: 'mdro2026' };
 
 // ── نظام الصلاحيات ─────────────────────────────────────────────
 let OWNER_SECRET = null; // يتحمل من Firestore — مش مخزن في الكود
@@ -9066,10 +9099,11 @@ function setOwnerContact(email, phone) {
 }
 
 function getCredentials() {
+  // لا توجد بيانات دخول افتراضية نهائياً — الدخول حصرياً عبر Firebase Auth
   try {
     const c = JSON.parse(localStorage.getItem('mdro_credentials'));
-    return c && c.user && c.pass ? c : DEFAULT_CREDS;
-  } catch { return DEFAULT_CREDS; }
+    return c && c.user && c.pass ? c : {};
+  } catch { return {}; }
 }
 function setCredentials(u, p) {
   localStorage.setItem('mdro_credentials', JSON.stringify({ user: u, pass: p }));
@@ -9097,7 +9131,8 @@ function doLogin() {
       setTimeout(() => { document.getElementById('loginScreen').style.display = 'none'; }, 420);
       applyRoleUI();
       initNotifications();
-      flushSyncQueue();
+      flushSyncQueue(); // دفع بيانات الجهاز المحلية أولاً
+      schedulePull(150); // ثم سحب السحابة (لا تُستبدل بيانات الجهاز الأحدث)
       switchTab('home');
       localStorage.setItem('mdro_session_active', '1');
       const who = window.MDROAuth.get();
@@ -9107,38 +9142,10 @@ function doLogin() {
     return;
   }
 
-  // ترواجع قديم (لأغراض التوافق فقط قبل اكتمال تهيئة النظام الجديد)
-  const creds = getCredentials();
-  if (u === creds.user && p === creds.pass) {
-    err.textContent = '⏳ جاري التحقق من صلاحيات الجهاز...';
-    checkDeviceAccess().then(role => {
-      if (role === 'blocked') {
-        err.textContent = '🚫 هذا الجهاز محظور. تواصل مع مسؤول النظام.';
-        localStorage.removeItem('mdro_session');
-        _currentRole = 'pending';
-      } else if (role === 'pending' && isOnline) {
-        err.textContent = '⏳ جهازك في انتظار الموافقة. تواصل مع مسؤول النظام.';
-        localStorage.removeItem('mdro_session');
-        _currentRole = 'pending';
-      } else {
-        err.textContent = '';
-        localStorage.setItem('mdro_session', Date.now());
-        document.getElementById('loginScreen').classList.add('hidden');
-        setTimeout(() => { document.getElementById('loginScreen').style.display = 'none'; }, 420);
-        applyRoleUI();
-        mdroSetLastUser('', creds.user, (role === 'blocked' || role === 'pending') ? 'viewer' : role);
-        initNotifications();
-        flushSyncQueue();
-        switchTab('home');
-        localStorage.setItem('mdro_session_active', '1');
-      }
-    });
-  } else {
-    err.textContent = '❌ اسم المستخدم أو كلمة المرور غير صحيحة';
-    document.getElementById('loginPass').value = '';
-    document.getElementById('loginPass').classList.add('err');
-    setTimeout(() => document.getElementById('loginPass').classList.remove('err'), 1200);
-  }
+  // أُغلق المسار المحلي القديم نهائياً (كان يقبل بيانات افتراضية مثل admin/mdro2026).
+  // الدخول حصرياً عبر Firebase Auth (MDROAuth) — أي فشل هنا يعني عدم تحميل النظام.
+  err.textContent = '❌ فشل تحميل نظام تسجيل الدخول — حدّث التطبيق إلى أحدث إصدار وأعد المحاولة، أو تواصل مع مسؤول النظام.';
+  document.getElementById('loginPass').value = '';
 }
 
 function doLogout() {
@@ -9188,7 +9195,8 @@ async function checkSession() {
       document.getElementById('loginScreen').style.display = 'none';
       applyRoleUI();
       initNotifications();
-      flushSyncQueue();
+      flushSyncQueue(); // دفع بيانات الجهاز المحلية أولاً
+      schedulePull(200); // ثم سحب السحابة
       const lastTab = localStorage.getItem('mdro_last_tab');
       const sessionActive = localStorage.getItem('mdro_session_active');
       if (lastTab && lastTab !== 'home' && sessionActive) {
@@ -9404,7 +9412,7 @@ function applyNewCredentials() {
   const creds      = getCredentials();
 
   if (!currentPwd) { errEl.textContent = '⚠️ أدخل كلمة المرور الحالية'; return; }
-  if (currentPwd !== creds.pass) { errEl.textContent = '❌ كلمة المرور الحالية غير صحيحة'; return; }
+  if (creds.pass && currentPwd !== creds.pass) { errEl.textContent = '❌ كلمة المرور الحالية غير صحيحة'; return; }
   if (!newUser && !newPass) { errEl.textContent = '⚠️ أدخل بيانات جديدة على الأقل'; return; }
   if (newPass && newPass !== confirm) { errEl.textContent = '❌ كلمة المرور غير متطابقة'; return; }
   if (newPass && newPass.length < 4) { errEl.textContent = '⚠️ 4 أحرف على الأقل'; return; }
@@ -9922,7 +9930,7 @@ function confirmVerifyPwd() {
   const creds = getCredentials();
   const errEl = document.getElementById('verifyPwdError');
   if (!entered) { errEl.textContent = '⚠️ أدخل كلمة المرور'; return; }
-  if (entered !== creds.pass) { errEl.textContent = '❌ كلمة المرور غير صحيحة'; return; }
+  if (creds.pass && entered !== creds.pass) { errEl.textContent = '❌ كلمة المرور غير صحيحة'; return; }
 
   const field = window._pendingSaveField;
 
