@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 // ── Caching ────────────────────────────────────────────────
-const CACHE_VERSION = 'mdro-v200';
+const CACHE_VERSION = 'mdro-v203';
 const CACHE = CACHE_VERSION;
 
 const CORE_FILES = [
@@ -75,6 +75,25 @@ self.addEventListener('fetch', event => {
   if (req.url.includes('firestore.googleapis.com')) return;
   if (req.url.includes('firebase')) return;
   if (req.url.includes('gstatic.com')) return;
+
+  // صفحات HTML تُجلب من الشبكة أولاً (network-first) حتى يصلك أي تحديث ننشره
+  // فوراً بدل بقاء نسخة قديمة في الكاش للقرون (سبب شائع لعدم ظهور بيانات/تحديثات).
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith(
+      fetch(req)
+        .then(networkRes => {
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE).then(cache => cache.put(req, clone));
+          }
+          return networkRes;
+        })
+        .catch(() =>
+          caches.match(req).then(cached => cached || caches.match('https://artistph.github.io/MDRO-APP/index.html'))
+        )
+    );
+    return;
+  }
 
   const isAppFile = CORE_FILES.some(f => req.url === f || req.url.startsWith('https://artistph.github.io/MDRO-APP/'));
 

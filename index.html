@@ -1236,16 +1236,23 @@ const FIREBASE_CONFIG = {
 };
 let db = null;
 let isOnline = navigator.onLine;
-const SYNC_QUEUE_KEY = 'mdro_sync_queue';
 
 // المزامنة تعمل فقط بجلسة مستخدم حقيقية (Firebase Auth عبر dbCompat) — لأن
 // قواعد Firestore (canWrite) ترفض أي كاتب غير مسجّل في users/{uid}.
-// لو مفيش جلسة حقيقية (قبل الدخول / كود المالك المحلي) تُحفظ البيانات في
-// الطابور ولا تُرفع حتى لا تضيع أبداً.
+// لو مفيش جلسة حقيقية (قبل الدخول / كود المالك المحلي / جلسة anonymous
+// مسترجَعة من كاش قديم) تُحفظ البيانات في الطابور ولا تُرفع حتى لا تضيع أبداً.
 function isRealSyncSession() {
   try {
     const u = window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get();
-    return !!(u && u.uid && u.role !== 'pending');
+    if (!(u && u.uid && u.role !== 'pending')) return false;
+    // الجلسة الفعلية التي يعتمد عليها Firestore Rules هي sessionAuth.currentUser
+    // (مخلوطة بـ dbCompat). وجوب ألا تكون anonymous ولا خالية، وأن يطابق uid
+    // جلسة MDROAuth المحلية — وإلا فكل كتابة سحابية ستفشل permission-denied
+    // وتظل عالقة في الطابور (تظهر على الجهاز فقط ولا تصل لبقية الأجهزة).
+    const au = (typeof sessionAuth !== 'undefined' && sessionAuth) ? sessionAuth.currentUser : null;
+    if (!au || au.isAnonymous) return false;
+    if (au.uid !== u.uid) return false;
+    return true;
   } catch { return false; }
 }
 
@@ -1256,7 +1263,14 @@ async function initFirebase() {
       await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js");
     const { getAuth, signInAnonymously } =
       await import("https://www.gstatic.com/firebasejs/10.7.0/firebase-auth.js");
-    const app = initializeApp(FIREBASE_CONFIG);
+    // استخدم مثيل الـ compat app الموجود إن وُجد — حتى لا يتعارض Auth
+    // الموديولار (الذي يتصل ببرودكشن) مع جلسة المستخدم الحقيقية في Auth
+    // الـ compat ويسجّل خروج المستخدم بعد ثوانٍ من الدخول (كانت كل
+    // المزامنات تفشل بفعل ذلك). إنشاء مثيل ثانٍ مستقل كان يوقّع الخروج
+    // بعد ~1.5 ثانية: تغيّر auth -> null فتتوقف الكتابة permission-denied.
+    const app = (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length)
+      ? firebase.app()
+      : initializeApp(FIREBASE_CONFIG);
     window._firebaseApp = app; // مرجع للـ app عشان FCM
     db = getFirestore(app);
     window._fs = { doc, setDoc, getDoc, collection, getDocs, deleteDoc, db };
@@ -1265,7 +1279,9 @@ async function initFirebase() {
     // المزامنة (دفع/سحب mdro_data) لا تعمل إلا بجلسة المستخدم الحقيقي عبر
     // dbCompat — لأن Firestore Rules تتطلب canWrite() لأي كتابة في mdro_data.
     const auth = getAuth(app);
-    await signInAnonymously(auth).catch(e => console.warn('Auth:', e));
+    if (!auth.currentUser) {
+      await signInAnonymously(auth).catch(e => console.warn('Auth:', e));
+    }
 
     // تحميل OWNER_SECRET من Firestore — مش مخزن في الكود
     try {
@@ -1282,221 +1298,550 @@ async function initFirebase() {
   } catch(e) { console.warn('Firebase:', e); }
 }
 
-async function pushToCloud(key, data, localTs) {
-  // بدون جلسة حقيقية أو أوفلاين — دايمًا احط في الطابور (لا تضيع بيانات)
-  if (!dbCompat || !isOnline || !isRealSyncSession()) { addToQueue(key, data, localTs); return false; }
-  // أونلاين — لو مفيش صلاحية متدفعش للكلود (pending يحطه في الطابور لحين الموافقة)
-  if (_currentRole === 'blocked') return false;
-  if (_currentRole === 'viewer' || _currentRole === 'pending') { addToQueue(key, data, localTs); return false; }
-  const ts = localTs || Date.now();
-  try {
-    // الكتابة عبر dbCompat (جلسة المستخدم الحقيقي) — يقبلها Firestore Rules
-    const ref = dbCompat.collection('mdro_data').doc(key.replace('mdro_',''));
-    // اقرأ النسخة السحابية الحالية لتجنب الكتابة فوق بيانات أحدث زمنياً
-    const existSnap = await ref.get().catch(() => null);
-    const cloudDoc = existSnap && existSnap.exists ? existSnap.data() : null;
-    const cloudTs = cloudDoc ? (cloudDoc.updatedAt || 0) : 0;
-    if (localTs && cloudTs && cloudTs > localTs) return true; // سحابة أحدث — لا تلمس وانتهت حاجة الطابور
-    const cloudVer = cloudDoc ? (cloudDoc.version || 0) : 0;
-    const syncTsMap = tryParse(localStorage.getItem('mdro_sync_ts')) || {};
-    const nextVer = Math.max(syncTsMap[key + '_ver'] || 0, cloudVer) + 1;
-    await ref.set({
-      data: JSON.stringify(data),
-      version: nextVer,
-      updatedAt: ts
-    });
-    syncTsMap[key + '_ver'] = nextVer;
-    syncTsMap[key] = ts;
-    localStorage.setItem('mdro_sync_ts', JSON.stringify(syncTsMap));
-    schedulePull();
-    return true;
-  } catch(e) { addToQueue(key, data, localTs); return false; }
-}
+// ═══════════════════════════════════════════════════════════════
+// محرك المزامنة MDRO — نسخة منقولة من محرك تطبيق الإداريات (Sync)
+// التصميم: دمج على مستوى الحقل (leaf) وليس استبدال المستند كاملاً.
+//  - كل مستند سحابي مصحوب بخريطة _kv: { مفتاح الحقل => آخر زمن (سيرفر) }.
+//  - عند الكتابة يُدمَج كل حقل على حدة في transaction: الأحدث زمناً يربح
+//    ولا يُمسح عمل الجهاز الآخر في الحقول الأخرى.
+//  - المسح الصريح (بيانات فاضية) يُنفَّذ فقط إن لم تكُن كتابة أحدث تعقبه،
+//    ويُحفَظ شاهد قبر (#DEL) في _kv حتى لا تعيد أجهزة أخرى إحياء الحقل.
+//  - جهاز أوفلاين يحفظ محلياً ويُضيف لقائمة انتظار، وعند الاتصال يدمج ويدفع.
+//  - المقارنة الزمنية بمجال ساعة السيرفر بعد تصحيح إزاحة ساعة الجهاز
+//    (mdro_sync_probe) — كما في الإداريات (ic-sync-probe).
+//  - استماع لحظي (onSnapshot) ينعكس فوراً على الأجهزة الأخرى بدون إعادة تحميل.
+// مفاتيح البيانات: mdro_YEAR_MONTH_cases|stay|iso|iso_profiles + mdro_incomplete_YEAR_MONTH
+// ═══════════════════════════════════════════════════════════════
+const MDRO_SYNC_RE = /^mdro_(\d+_\d+_(cases|stay|iso|iso_profiles)|incomplete_\d+_\d+)$/;
 
-async function pullFromCloud() {
-  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
-  try {
-    const snap = await dbCompat.collection('mdro_data').get();
-    let n = 0;
-    const syncTsMap = tryParse(localStorage.getItem('mdro_sync_ts')) || {};
-    const isFirstRun = !localStorage.getItem('mdro_initialized');
+const MdrSync = {
+  pendingKey: 'mdro_pending_writes',
+  metaKey: 'mdro_sync_meta',
+  probeColl: 'mdro_sync_probe',
+  _listeners: null,
+  _skew: (function () { try { return parseFloat(localStorage.getItem('mdro_sync_skew')) || 0; } catch { return 0; } })(),
+  _skewValid: false,
 
-    let manifest = null;
-    snap.forEach(d => {
-      if (d.id === '_deletions_manifest') { manifest = d.data(); return; }
+  // ===== تقابل localStorage -> سحابة (كل مفاتيح البيانات في mdro_data) =====
+  prefixFor() { return 'mdro_'; },
 
-      const key = 'mdro_' + d.id;
-      const cloud = d.data();
-      const cloudVer = cloud.version || 0;
-      const cloudTs = cloud.updatedAt || 0;
-      const localVer = syncTsMap[key + '_ver'] || 0;
-      const localTs = syncTsMap[key] || 0;
+  parsePrefix(localKey) {
+    return MDRO_SYNC_RE.test(localKey) ? ['mdro_data', 'mdro_'] : [null, null];
+  },
 
-      if (localVer === -1) return; // اتمسح عمدًا من هذا الجهاز — مينزلش
+  docIdFromKey(localKey) {
+    const [coll, prefix] = this.parsePrefix(localKey);
+    return coll ? localKey.slice(prefix.length) : null;
+  },
 
-      const hasLocal = localStorage.getItem(key) !== null;
-      const localData = hasLocal ? tryParse(localStorage.getItem(key)) : null;
+  syncKeyOf(localKey) {
+    const [coll, prefix] = this.parsePrefix(localKey);
+    return coll ? coll + '/' + localKey.slice(prefix.length) : null;
+  },
 
-      // حماية حاسمة: بيانات محلية غير متزامنة أصلاً (Version=0) — المحلي هو
-      // عمل هذا الجهاز الأحدث فعلياً (أدخل بعد توقف المزامنة) — لا تستبدله
-      // بالسحابة الثابتة، ادفعه أولاً ثم راجع السحابة بعد أن ترتفع نسخته.
-      if (hasLocal && localData !== null && !localTs && localVer === 0) {
-        pushToCloud(key, localData, Date.now());
-        n++;
-        return;
-      }
+  isOnline() { return navigator.onLine !== false; },
 
-      if (isFirstRun) {
-        // أول تشغيل على هذا الجهاز — حمل كل حاجة من السحابة
-        localStorage.setItem(key, cloud.data);
-        syncTsMap[key + '_ver'] = cloudVer;
-        syncTsMap[key] = cloudTs || Date.now();
-        n++;
-      } else if (localTs && cloudTs && localTs > cloudTs && localVer !== 0) {
-        // المحلي أحدث زمنياً رغم أن عداد النسخة أقل (بيانات قديمة عالقة) — ادفعها
-        if (localData !== null) pushToCloud(key, localData, localTs);
-        n++;
-      } else if (cloudVer > localVer) {
-        // السحابة أحدث — نزل المحلي (الأحدث زمنياً ورقمياً)
-        localStorage.setItem(key, cloud.data);
-        syncTsMap[key + '_ver'] = cloudVer;
-        syncTsMap[key] = cloudTs || Date.now();
-        n++;
-      } else if (cloudVer > 0 && cloudVer < localVer) {
-        // المحلي أحدث — ارفع للسحابة
-        if (localData !== null) {
-          pushToCloud(key, localData, localTs || Date.now());
+  // الكتابة/الرفع للسحابة: جلسة Firebase حقيقية (غير anonymous) مطابقة للجلسة
+  // المحلية — لأن قواعد Firestore تفرض canWrite() لكاتب مسجّل في users/{uid}
+  // بدور owner/editor. أي جلسة محلية/كود مالك/anonymous تُصفّ محلياً فقط.
+  canSync() { return !!dbCompat && isRealSyncSession(); },
+
+  // القراءة/الاستماع من السحابة: أي جلسة Firebase مسجّلة ولو anonymous كافية —
+  // لأن قواعد Firestore تسمح بقراءة mdro_data لأي signedIn. هذا يعني أن أي
+  // جهاز سمع تطبيقاً (بجلسة سرية من initFirebase) يستقبل تغييرات الآخرين
+  // حتى قبل/بدون دخول كامل؛ بينما الرفع يظل محصوراً بـ canSync()+canWrite().
+  canRead() { return !!dbCompat && !!(sessionAuth && sessionAuth.currentUser); },
+
+  canWrite() {
+    const r = _currentRole || (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().role);
+    return r === 'owner' || r === 'editor';
+  },
+
+  // ===== زمن موحّد (Timestamp / Date / رقم / نص) =====
+  ts(v) {
+    if (!v) return 0;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    if (typeof v.getTime === 'function') return v.getTime();
+    if (typeof v === 'number') return v;
+    const p = Date.parse(v);
+    return isNaN(p) ? 0 : p;
+  },
+
+  /** يجدد إزاحة ساعة الجهاز عن ساعة السحابة ليكون المقارنة الزمنية عادلة */
+  async refreshSkew() {
+    if (!this.canRead() || !this.isOnline()) return this._skew;
+    try {
+      const ref = dbCompat.collection(this.probeColl).doc('skew');
+      await ref.set({ at: firebase.firestore.FieldValue.serverTimestamp() });
+      const snap = await ref.get();
+      if (snap.exists) {
+        const serverNow = this.ts(snap.data().at);
+        if (serverNow) {
+          this._skew = serverNow - Date.now();
+          this._skewValid = true;
+          try { localStorage.setItem('mdro_sync_skew', String(this._skew)); } catch {}
         }
       }
+    } catch {}
+    return this._skew;
+  },
+
+  // سجل آخر تعديل محلي لكل مستند/حقل (زمن خام بساعة الجهاز؛ تُطبَّق إزاحة السيرفر وقت المقارنة)
+  readMeta() {
+    try { return JSON.parse(localStorage.getItem(this.metaKey) || '{}'); }
+    catch { return {}; }
+  },
+  writeMeta(m) { try { localStorage.setItem(this.metaKey, JSON.stringify(m)); } catch {} },
+
+  /** يحوّل زمن ميلّي خام (ساعة الجهاز) إلى مجال ساعة السيرفر وقت المقارنة */
+  _adj(localTs) { return localTs + this._skew; },
+  /** عكس _adj: يخزّن أزمنة السيرفر كقيم خام في meta حتى لا تتلوّث بإزاحة قديمة */
+  _unadj(serverTs) { return serverTs - this._skew; },
+
+  /** قراءة إدخال meta لمستند معيّن بحُقُل موحّدة {t, k:{حقل=>زمن}, d:{حقل=>زمن حذف}} */
+  metaOf(sk) {
+    const all = this.readMeta();
+    let m = all[sk];
+    if (m == null) return { t: 0, k: {}, d: {} };
+    if (typeof m === 'number') return { t: m, k: {}, d: {} };
+    return { t: m.t || 0, k: m.k || {}, d: m.d || {} };
+  },
+  setMeta(sk, m) {
+    const all = this.readMeta();
+    all[sk] = m;
+    this.writeMeta(all);
+  },
+
+  // ===== قائمة الانتظار (للانقطاع) =====
+  readQueue() {
+    try { return JSON.parse(localStorage.getItem(this.pendingKey) || '[]'); }
+    catch { return []; }
+  },
+  writeQueue(q) { try { localStorage.setItem(this.pendingKey, JSON.stringify(q)); } catch {} },
+  enqueue(localKey) {
+    const q = this.readQueue();
+    if (!q.some(i => i.localKey === localKey)) q.push({ localKey });
+    this.writeQueue(q);
+  },
+
+  // ===== أدوات تحليل الحمل إلى حقول =====
+  isLeafMapped(v) { return v !== null && typeof v === 'object'; },
+  isEmpty(data) {
+    if (data == null) return true;
+    if (Array.isArray(data)) return data.length === 0;
+    if (typeof data === 'object') return Object.keys(data).length === 0;
+    return data === '';
+  },
+  /** مفتاح حقل عنصر (عنصر المصفوفة يُعرَّف بمعرّفه إن وُجد) */
+  keyOf(el, idx) { return (el && el.id != null) ? String(el.id) : ('#i' + (idx != null ? idx : 0)); },
+  serial(v) { try { return JSON.stringify(v); } catch { return String(v); } },
+  /** يحوّل data إلى خريطة حقول {مفتاح => قيمة} مع إشارة إن كانت مصفوفة */
+  leafMap(data) {
+    if (Array.isArray(data)) {
+      const map = {};
+      data.forEach((el, i) => { map[this.keyOf(el, i)] = el; });
+      return { arr: true, map };
+    }
+    const map = {};
+    if (data && typeof data === 'object') Object.keys(data).forEach(k => { map[k] = data[k]; });
+    return { arr: false, map };
+  },
+  /** يعيد بناء قيم data من الخريطة المندمجة (يحافظ على ترتيب المصفوفة من السحاب) */
+  rebuild(base, mergedMap, isArray) {
+    if (!isArray) return mergedMap;
+    const out = Array.isArray(base) ? base.slice() : [];
+    Object.keys(mergedMap).forEach(key => {
+      const idx = out.findIndex(el => this.keyOf(el, 0) === key);
+      if (idx >= 0) out[idx] = mergedMap[key];
+      else out.push(mergedMap[key]);
     });
+    return out.filter(el => mergedMap[this.keyOf(el, 0)] !== undefined);
+  },
 
-    // تطبيق المانifest — حذف المفاتيح اللي اتمسحت من جهاز تاني
-    if (manifest && Array.isArray(manifest.keys)) {
-      const manifestTs = manifest.updatedAt || 0;
-      const lastApplied = parseInt(localStorage.getItem('mdro_deletions_applied_ts') || '0');
-      if (manifestTs > lastApplied) {
-        manifest.keys.forEach(k => {
-          if (localStorage.getItem(k)) {
-            localStorage.removeItem(k);
-            delete syncTsMap[k];
-            delete syncTsMap[k + '_ver'];
-            n++;
+  /** يفسّر مستنداً سحابياً (جديد أو قديم): يحلّ data سلسلة نصية قديمة إلى كائن */
+  normCloud(c) {
+    if (c == null) return { data: null, kv: {} };
+    let d = c.data !== undefined ? c.data : c;
+    if (typeof d === 'string') { try { d = JSON.parse(d); } catch {} }
+    return { data: d, kv: (c && c._kv) || {} };
+  },
+
+  /**
+   * دمج حقول محلية مع أخرى سحابية — كل حقل على حدة، الأحدث يربح.
+   * قيم kv الناتجة: null = "زمن السيرفر الآن" (مكسب محلي)، رقم = زمن سحابي،
+   * '#DEL' = حذف (شاهد قبر يمنع إحياء الحقل من نسخ الأجهزة الأخرى).
+   */
+  mergeLeaves(localLeaf, cloudLeaf, cloudKv, m, legacyCloudTs) {
+    const mergedMap = {}, kv = {};
+    const keys = new Set([
+      ...Object.keys(localLeaf.map),
+      ...Object.keys(cloudLeaf.map),
+      ...Object.keys(cloudKv || {}),
+    ]);
+    keys.forEach(key => {
+      const lv = localLeaf.map[key];
+      const cv = cloudLeaf.map[key];
+      const lTs = this._adj((m.k && m.k[key]) || (m.d && m.d[key]) || (m.t || 0));
+      const isDel = m.d && m.d[key] != null;
+      const safeCloudTs = cloudKv ? this.ts(cloudKv[key]) : 0;
+      const cTs = safeCloudTs || (cv !== undefined && legacyCloudTs) || 0;
+      const hasCloudRec = !!(cloudKv && cloudKv[key] !== undefined);
+      if (lv !== undefined) {
+        if (cv === undefined) {
+          if (hasCloudRec && cTs > 0 && cTs > lTs) {
+            kv[key] = cTs; // حذف سحابي أحدث — نحفظ أثره ولا نُبقي قيمتنا القديمة
+          } else {
+            mergedMap[key] = lv; kv[key] = null; // جديد محلياً
           }
-        });
-        localStorage.setItem('mdro_deletions_applied_ts', String(manifestTs));
+        } else if (lTs > 0 && lTs >= cTs) {
+          mergedMap[key] = lv; kv[key] = null; // الأحدث محلياً
+        } else {
+          mergedMap[key] = cv; kv[key] = cTs || null; // السحاب أحدث
+        }
+      } else if (cv !== undefined) {
+        if (isDel && lTs > 0 && lTs >= cTs) {
+          kv[key] = '#DEL'; // محذوف محلياً بأحدث زمن — شاهد قبر
+        } else {
+          mergedMap[key] = cv; kv[key] = cTs || null;
+        }
+      } else if (hasCloudRec) {
+        kv[key] = safeCloudTs || '#DEL'; // حذف معروف من السحاب — نحفظ أثره
       }
+    });
+    return { map: mergedMap, kv, arr: localLeaf.arr || cloudLeaf.arr };
+  },
+
+  /** يسجّل في meta الحقول التي تغيّرت محلياً (زمن خام بساعة الجهاز، يُصحّح وقت المقارنة) */
+  noteWrite(localKey, prevRaw) {
+    const sk = this.syncKeyOf(localKey);
+    if (!sk) return;
+    const m = this.metaOf(sk);
+    const nowR = Date.now();
+    let prev = null, cur = null;
+    try { prev = prevRaw != null ? JSON.parse(prevRaw) : null; } catch {}
+    try { cur = JSON.parse(localStorage.getItem(localKey)); } catch {}
+    if (prev != null && cur != null && this.isLeafMapped(prev) && this.isLeafMapped(cur)) {
+      const pm = this.leafMap(prev).map, cm = this.leafMap(cur).map;
+      new Set([...Object.keys(pm), ...Object.keys(cm)]).forEach(key => {
+        const pv = pm[key], cv = cm[key];
+        if (pv === undefined) { m.k[key] = nowR; delete m.d[key]; }
+        else if (cv === undefined) { m.d[key] = nowR; delete m.k[key]; }
+        else if (this.serial(pv) !== this.serial(cv)) { m.k[key] = nowR; delete m.d[key]; }
+        else if (m.k[key] == null) { m.k[key] = nowR; }
+      });
+      m.t = Math.max(m.t || 0, nowR);
+    } else {
+      m.t = nowR;
     }
+    this.setMeta(sk, m);
+  },
 
-    localStorage.setItem('mdro_sync_ts', JSON.stringify(syncTsMap));
-    if (isFirstRun) localStorage.setItem('mdro_initialized', '1');
-
-    if (n > 0) {
-      buildMonthGrid();
-      refreshCaseList();
-      refreshReport();
-      refreshIncompleteList();
-      updateIncompleteNavBadge();
-      toast('✅ تم المزامنة');
+  /** يُخزّن محلياً فوراً ثم يدمج ويدفع للسحابة (أو يصفّ عند الانقطاع) */
+  async push(localKey, data) {
+    const prevRaw = localStorage.getItem(localKey);
+    localStorage.setItem(localKey, JSON.stringify(data));
+    this.noteWrite(localKey, prevRaw);
+    // blocked: يحفظ محلياً فقط — لا طابور لا سحابة
+    const role = _currentRole || (window.MDROAuth && window.MDROAuth.get && window.MDROAuth.get().role);
+    if (role === 'blocked') { console.warn('[SYNC] push BLOCKED role', localKey); return; }
+    if (!this.canSync()) { console.warn('[SYNC] push cantSync (no session?)', localKey); this.enqueue(localKey); return; }
+    const doc = this.docIdFromKey(localKey);
+    if (!doc) { console.warn('[SYNC] push no docId', localKey); return; }
+    if (!this.canWrite()) { console.warn('[SYNC] push cantWrite role=' + role, localKey); this.enqueue(localKey); return; }
+    if (!this.isOnline()) { this.enqueue(localKey); return; }
+    try {
+      await this.writeMerged(localKey, data);
+      console.log('[SYNC] push OK', localKey);
     }
-    _flushPendingManifest();
-  } catch(e) { console.warn('pullFromCloud:', e); }
-}
+    catch (e) { console.warn('[SYNC] push FAILED', localKey, e); this.enqueue(localKey); }
+  },
 
-// سلسلة وعود لتسلسل كتابة الطابور ومنع السباق
-let _queueChain = Promise.resolve();
-function addToQueue(key, data, localTs) {
-  _queueChain = _queueChain.then(() => {
-    const q = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
-    // نحافظ على أول ts (لحظة الإنشاء) إن وجد — لترتيب الأولوية الزمني الصحيح
-    q[key] = { data, ts: (q[key] && q[key].ts) || localTs || Date.now() };
-    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(q));
+  /** خريطة زمن "الآن" لكل حقول data (أول إنشاء مستند سحابي) */
+  kvNow(data) {
+    const lm = this.leafMap(data);
+    const kv = {};
+    Object.keys(lm.map).forEach(k => { kv[k] = firebase.firestore.FieldValue.serverTimestamp(); });
+    return kv;
+  },
+
+  /**
+   * الكتابة للسحابة بدمج الحقوق (transaction):
+   *  - بيانات فارغة = مسح صريح: يُنفَّذ فقط إن لم تكن كتابة أخرى أحدث من لحظة الحذف،
+   *    ويُحفظ شاهد قبر لكل حقل كان موجوداً في _kv حتى لا تعيد أجهزة أخرى إحياءه.
+   *  - غير فارغة = دمج حقل-ب-حقل مع _kv الحالية وحفظ الناتج.
+   */
+  async writeMerged(localKey, data) {
+    const coll = this.parsePrefix(localKey)[0];
+    const doc = this.docIdFromKey(localKey);
+    const ref = dbCompat.collection(coll).doc(doc);
+    const sk = this.syncKeyOf(localKey);
+    const m = this.metaOf(sk);
+    const serverTS = () => firebase.firestore.FieldValue.serverTimestamp();
+    const empty = this.isEmpty(data);
+    const seedKv = empty ? {} : this.kvNow(data);
+    try {
+      await dbCompat.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) {
+          tx.set(ref, { data, _kv: seedKv, updatedAt: serverTS() });
+          return;
+        }
+        const c = snap.data();
+        if (empty) {
+          const cTs = this.ts(c.updatedAt);
+          if (cTs > this._adj(Date.now())) return; // كتابة أخرى أعقبت الحذف — لا نمسحها
+          const cnorm = this.normCloud(c);
+          const cLeaf = this.leafMap(cnorm.data);
+          const tombKv = {};
+          [...Object.keys(cLeaf.map), ...Object.keys(cnorm.kv)]
+            .forEach(k => { tombKv[k] = serverTS(); });
+          tx.set(ref, { data, _kv: tombKv, updatedAt: serverTS() });
+          return;
+        }
+        const cnorm = this.normCloud(c);
+        const hasCloudKv = Object.keys(cnorm.kv).length > 0;
+        const res = this.mergeLeaves(
+          this.leafMap(data),
+          this.leafMap(cnorm.data),
+          cnorm.kv,
+          m,
+          hasCloudKv ? 0 : this.ts(c.updatedAt)
+        );
+        const outData = this.rebuild(cnorm.data, res.map, res.arr);
+        const outKv = {};
+        Object.keys(res.kv).forEach(key => {
+          const v = res.kv[key];
+          outKv[key] = (v === null || v === '#DEL')
+            ? serverTS()
+            : firebase.firestore.Timestamp.fromMillis(v);
+        });
+        tx.set(ref, { data: outData, _kv: outKv, updatedAt: serverTS() });
+      });
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  /** يدفع كل قائمة الانتظار للسحابة (دمج) ويُبقي فقط ما فشل */
+  async flushPending() {
+    if (!this.canSync() || !this.isOnline()) return;
+    const q = this.readQueue();
+    if (!q.length) return;
+    if (this.canWrite()) await this.refreshSkew();
+    const failed = [];
+    for (const item of q) {
+      const doc = this.docIdFromKey(item.localKey);
+      const localData = localStorage.getItem(item.localKey);
+      if (!doc || localData == null) continue;
+      try {
+        await this.writeMerged(item.localKey, JSON.parse(localData));
+      } catch { failed.push(item); }
+    }
+    this.writeQueue(failed);
+  },
+
+  /**
+   * يعكس تغييراً قادماً من السحابة إلى الكاش المحلي بدمج الحقول.
+   * لا يُمسح عمل محلي أحدث في حقول لم يمسها السحاب.
+   */
+  applyRemote(coll, docId, remoteData, remoteUpdatedAt, remoteKv) {
+    const localKey = this.prefixFor(coll) + docId;
+    console.log('[SYNC] applyRemote', docId, 'data?', remoteData !== null && remoteData !== undefined, 'ts', remoteUpdatedAt);
+    const sk = coll + '/' + docId;
+    if (remoteData === null || remoteData === undefined) {
+      const meta = this.readMeta();
+      localStorage.removeItem(localKey);
+      delete meta[sk];
+      this.writeMeta(meta);
+      return true;
+    }
+    if (typeof remoteData === 'string') { try { remoteData = JSON.parse(remoteData); } catch {} }
+    const m = this.metaOf(sk);
+    const remoteTs = this.ts(remoteUpdatedAt);
+    const kv = remoteKv || {};
+    const hasKv = Object.keys(kv).length > 0 || Object.keys(m.k).length > 0 || Object.keys(m.d).length > 0;
+    const existing = localStorage.getItem(localKey);
+    if (hasKv && this.isLeafMapped(remoteData)) {
+      let parsedLocal = null;
+      try { parsedLocal = existing != null ? JSON.parse(existing) : null; } catch {}
+      const localLeaf = (parsedLocal != null && this.isLeafMapped(parsedLocal))
+        ? this.leafMap(parsedLocal)
+        : { arr: Array.isArray(remoteData), map: {} };
+      const res = this.mergeLeaves(
+        localLeaf,
+        this.leafMap(remoteData),
+        kv,
+        m,
+        Object.keys(kv).length ? 0 : remoteTs
+      );
+      const outData = this.rebuild(remoteData, res.map, res.arr);
+      const next = JSON.stringify(outData);
+      if (existing !== next) localStorage.setItem(localKey, next);
+      const nowR = Date.now();
+      Object.keys(res.kv).forEach(key => {
+        const v = res.kv[key];
+        const sv = (v === '#DEL' || v == null) ? nowR : this._unadj(this.ts(v));
+        if (res.map[key] === undefined) {
+          m.d[key] = sv; if (m.k[key]) delete m.k[key];
+        } else if (v === null) {
+          if (m.k[key] == null) m.k[key] = nowR; if (m.d[key]) delete m.d[key];
+        } else {
+          m.k[key] = sv; if (m.d[key]) delete m.d[key];
+        }
+      });
+      this.setMeta(sk, m);
+      return existing !== next;
+    }
+    // مسار قديم (مستند بلا خريطة حقول): استبدال كامل عند اختلاف المحتوى
+    if (existing == null) {
+      localStorage.setItem(localKey, typeof remoteData === 'string' ? remoteData : JSON.stringify(remoteData));
+      if (remoteTs) { m.t = this._unadj(remoteTs); this.setMeta(sk, m); }
+      return true;
+    }
+    // حماية الهجرة: مستند قديم بلا _kv وسجل محلي أحدث زمنياً — نحافظ على
+    // المحلي ونطلب رفعه (يدّعيه) بدل استبداله بمحتوى سحابي أقدم.
+    if (m.t && remoteTs && this._adj(m.t) > remoteTs) {
+      try { this.writeMerged(localKey, JSON.parse(existing)); } catch {}
+      return false;
+    }
+    const next = typeof remoteData === 'string' ? remoteData : JSON.stringify(remoteData);
+    if (existing !== next) localStorage.setItem(localKey, next);
+    if (remoteTs) { m.t = this._unadj(remoteTs); this.setMeta(sk, m); }
+    return existing !== next;
+  },
+
+  /** يسحب كل المستندات من mdro_data ويربطها بالكاش المحلي (دمج، بلا كسر الأحدث محلياً) */
+  async syncAll() {
+    if (!this.canRead() || !this.isOnline()) return false;
+    await this.refreshSkew().catch(() => {});
+    const queued = new Set(this.readQueue().map(it => this.docIdFromKey(it.localKey)).filter(Boolean));
+    let changed = false;
+    try {
+      const snap = await dbCompat.collection('mdro_data').get();
+      console.log('[SYNC] syncAll got', snap.size, 'docs');
+      const seen = new Set();
+      snap.forEach(doc => {
+        if (doc.id === '_deletions_manifest') return; // بقايا النظام القديم — تُتجاهل
+        const v = doc.data();
+        if (v) {
+          if (this.applyRemote('mdro_data', doc.id, v.data !== undefined ? v.data : v, v.updatedAt, v._kv)) changed = true;
+          seen.add(doc.id);
+        }
+      });
+      // حذف أي مفتاح بيانات محلي لم يعد موجوداً في السحابة (ولم يصفّ انتظاراً له).
+      // حماية: لا نمسح مفتاحاً لم يُزامَن هذا الجهاز عليه قط (لم يصل للسحابة ولم
+      // يُصفّ) — كبيانات جهاز محظور/قارئ — حتى لا تضيع أبداً.
+      // التنظيف موجه للكاتب فقط (canWrite): القارئ/المحلي قد يحمل بيانات محلية
+      // لم تصعد سحابياً بعد، ومسحها من السحب قد يعرّضها للفقدان.
+      if (this.canWrite()) {
+        Object.keys(localStorage).forEach(k => {
+          if (!MDRO_SYNC_RE.test(k)) return;
+          const id = k.slice('mdro_'.length);
+          if (seen.has(id) || queued.has(id)) return;
+          const sk = 'mdro_data/' + id;
+          const m = this.metaOf(sk);
+          if (!(m.t || Object.keys(m.k).length || Object.keys(m.d).length)) return;
+          localStorage.removeItem(k);
+        });
+      }
+      if (this.canWrite()) await this.flushPending().catch(() => {});
+    } catch (e) { console.warn('syncAll:', e); return false; }
+    return changed;
+  },
+
+  /** استماع لحظي: أي تغيير عند أي جهاز يُدمج وينعكس هنا فوراً (بدون ريفريش) */
+  startListening() {
+    if (this._listeners || !this.canRead() || !this.isOnline()) { console.warn('[SYNC] startListening skipped', !!this._listeners, this.canRead(), this.isOnline()); return; }
+    let sub = null;
+    try {
+      console.log('[SYNC] startListening subscribing…');
+      sub = dbCompat.collection('mdro_data').onSnapshot(
+        snap => {
+          let changed = false;
+          snap.docChanges().forEach(change => {
+            if (change.type === 'removed') {
+              if (this.applyRemote('mdro_data', change.doc.id, null, null)) changed = true;
+            } else {
+              const v = change.doc.data();
+              if (this.applyRemote('mdro_data', change.doc.id, v && v.data !== undefined ? v.data : v, v && v.updatedAt, v && v._kv)) changed = true;
+            }
+          });
+          if (changed) { console.log('[SYNC] snapshot changed → render'); mdroRender(); }
+        },
+        () => { this.stopListening(); }
+      );
+    } catch {
+      try { sub && sub(); } catch {}
+    }
+    this._listeners = sub ? [sub] : null;
+  },
+
+  stopListening() {
+    if (this._listeners) {
+      this._listeners.forEach(u => { try { u(); } catch {} });
+      this._listeners = null;
+    }
+  },
+
+  /** مزامنة كاملة مرتبة: دفع الطابور ثم سحب ثم استماع (كـ"syncAll" في الإداريات) */
+  async hardSync() {
+    if (!this.canRead()) return false;
+    if (!this.isOnline()) return false;
+    await this.refreshSkew().catch(() => {});
+    if (this.canWrite()) await this.flushPending().catch(() => {});
+    const changed = await this.syncAll().catch(() => false);
+    this.startListening();
+    return changed;
+  },
+};
+
+// ── وظائف محلية التطبيق يقصدها (واجهات متوافقة مع سابقتها) ────────────────────
+async function pushToCloud(key, data) { return MdrSync.push(key, data); }
+async function pullFromCloud() { return MdrSync.syncAll(); }
+async function flushSyncQueue() { return MdrSync.push ? MdrSync.flushPending() : Promise.resolve(); }
+async function addToQueue(key) { return MdrSync.enqueue(key); }
+
+// حذف صريح: إفراغ القيمة محلياً ثم دفع (المسح يُدمج بالحقول — الشاهد في _kv)
+function _deleteStorageKeys(keys) {
+  keys.forEach(k => {
+    if (!MdrSync.docIdFromKey(k)) { localStorage.removeItem(k); return; }
+    const arr = /^mdro_incomplete|_cases$/.test(k);
+    const empty = arr ? [] : {};
+    localStorage.setItem(k, JSON.stringify(empty));
+    MdrSync.push(k, empty);
   });
-}
-
-async function _flushPendingManifest() {
-  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
-  const manifest = tryParse(localStorage.getItem(DEL_MANIFEST_KEY));
-  if (!manifest || !Array.isArray(manifest.keys) || manifest.keys.length === 0) return;
-  await Promise.allSettled(manifest.keys.map(k =>
-    dbCompat.collection('mdro_data').doc(k.replace('mdro_','')).delete()
-  ));
-  await dbCompat.collection('mdro_data').doc('_deletions_manifest').set(manifest).catch(() => {});
-  localStorage.removeItem(DEL_MANIFEST_KEY);
   schedulePull();
 }
 
-async function flushSyncQueue() {
-  if (!dbCompat || !isOnline || !isRealSyncSession()) return;
-  const keys = Object.keys(tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {});
-  for (const k of keys) {
-    try {
-      // نقرأ الطابور قبل الدفع عشان نحصل على الـ timestamp الأصلي
-      const before = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
-      if (!before[k]) continue;
-      const item = before[k];
-      const localTs = item.ts || Date.now();
-      const ok = await pushToCloud(k, tryParse(item.data) || item.data, localTs);
-      // pushToCloud يرجع true إذا وصلت للسحابة أو تبيّن أن السحابة أحدث (انتهت حكمتها)
-      if (ok) {
-        const after = tryParse(localStorage.getItem(SYNC_QUEUE_KEY)) || {};
-        delete after[k];
-        localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(after));
-      }
-    } catch(e) { /* يبقى في الطابور أبداً — لا حذف */ }
-  }
-}
-
-function tryParse(s) { try { return JSON.parse(s); } catch { return null; } }
-
-// حذف مفاتيح من localStorage + Firestore + إشعار الأجهزة الأخرى
-const DEL_MANIFEST_KEY = 'mdro_deletions_manifest';
-function _deleteStorageKeys(keys) {
-  const ts = Date.now();
-  const manifest = { keys, updatedAt: ts };
-  keys.forEach(k => {
-    localStorage.removeItem(k);
-    const syncTsMap = tryParse(localStorage.getItem('mdro_sync_ts')) || {};
-    delete syncTsMap[k];
-    syncTsMap[k + '_ver'] = -1; // علامة: اتمسح عمدًا — مينزلش تاني من السحابة
-    localStorage.setItem('mdro_sync_ts', JSON.stringify(syncTsMap));
-  });
-  localStorage.setItem(DEL_MANIFEST_KEY, JSON.stringify(manifest));
-  _flushPendingManifest();
-}
-
-// ── مزامنة دورية — كل 5 ثواني ──────────────────────────────────
-let _pullLock = false;
-let _pullPending = false;
-function schedulePull(ms=1200) {
-  if (_pullPending) return;
-  _pullPending = true;
-  setTimeout(() => {
-    _pullPending = false;
-    if (_pullLock || !dbCompat || !isOnline || _currentRole === 'blocked' || !isRealSyncSession()) return;
-    _pullLock = true;
-    pullFromCloud().finally(() => { _pullLock = false; });
+// ── جدولة دورية خفيفة (دعم المرور أوفلاين→أونلاين حتى لو فات event) ──────────
+let _pullTimer = null;
+function schedulePull(ms = 1200) {
+  if (_pullTimer) clearTimeout(_pullTimer);
+  _pullTimer = setTimeout(() => {
+    if (!isOnline || !MdrSync.canRead() || _currentRole === 'blocked' || _currentRole === 'pending') return;
+    _pullTimer = null;
+    MdrSync.hardSync().then(ch => { if (ch) mdroRender(); });
   }, ms);
 }
-setInterval(async () => {
-  if (_pullLock || !dbCompat || !isOnline || _currentRole === 'blocked' || !isRealSyncSession()) return;
-  _pullLock = true;
-  try {
-    if (isEditor()) await flushSyncQueue(); // يصرف الطابور (دفع المحلي أولاً) ثم سحب
-    await pullFromCloud();
-  } finally { _pullLock = false; }
-}, 5000);
-
-// Fallback:  لو الـ online event ما اشتغلش (يحدث في بعض متصفحات الموبايل)
 setInterval(() => {
   const wasOffline = !isOnline;
   isOnline = navigator.onLine;
-  if (wasOffline && isOnline && dbCompat && isRealSyncSession()) {
-    // فاتنا event online — نزامن دلوقتي: دفع أولاً ثم سحب
-    flushSyncQueue();
-    schedulePull(200);
+  if (wasOffline && isOnline && MdrSync.canRead() && _currentRole !== 'blocked' && _currentRole !== 'pending') {
+    toast('🌐 متصل — جاري المزامنة');
+    MdrSync.hardSync().then(ch => { if (ch) mdroRender(); });
   }
+  if (isOnline && MdrSync.canRead() && _currentRole !== 'blocked' && _currentRole !== 'pending' && !MdrSync._listeners) MdrSync.startListening();
   updateSyncBadge();
 }, 3000);
+
+/** يرسم كل الشاشات التي تقرأ من localStorage بعد مزامنة/استماع */
+function mdroRender() {
+  try { buildMonthGrid(); } catch (e) {}
+  try { refreshCaseList(); } catch (e) {}
+  try { refreshReport(); } catch (e) {}
+  try { refreshIncompleteList(); } catch (e) {}
+  try { updateIncompleteNavBadge(); } catch (e) {}
+}
 
 function updateSyncBadge() {
   const b = document.getElementById('syncBadge');
@@ -1506,6 +1851,43 @@ function updateSyncBadge() {
   if (bt) bt.textContent = on ? 'متصل' : 'غير متصل';
 }
 
+// بيانات الطابور/الجلسة القديمة (التنسيق السابق) تُهاجر تلقائياً
+(function migrateLegacySync() {
+  try {
+    const oldQ = JSON.parse(localStorage.getItem('mdro_sync_queue') || '{}');
+    const q = MdrSync.readQueue();
+    Object.keys(oldQ).forEach(k => { if (!q.some(i => i.localKey === k)) q.push({ localKey: k }); });
+    MdrSync.writeQueue(q);
+    localStorage.removeItem('mdro_sync_queue');
+    localStorage.removeItem('mdro_initialized');
+  } catch {}
+  try {
+    const oldTs = JSON.parse(localStorage.getItem('mdro_sync_ts') || '{}');
+    const meta = MdrSync.readMeta();
+    Object.keys(oldTs).forEach(k => {
+      if (!MDRO_SYNC_RE.test(k)) return;
+      const sk = 'mdro_data/' + k.slice('mdro_'.length);
+      const raw = parseInt(oldTs[k] || 0) || 0;
+      if (raw && meta[sk] == null) meta[sk] = { t: raw, k: {}, d: {} };
+    });
+    MdrSync.writeMeta(meta);
+    localStorage.removeItem('mdro_sync_ts');
+  } catch {}
+  try {
+    const man = JSON.parse(localStorage.getItem('mdro_deletions_manifest') || 'null');
+    if (man && Array.isArray(man.keys)) {
+      man.keys.forEach(k => {
+        if (!MDRO_SYNC_RE.test(k)) { localStorage.removeItem(k); return; }
+        const arr = /^mdro_incomplete|_cases$/.test(k);
+        localStorage.setItem(k, JSON.stringify(arr ? [] : {}));
+        MdrSync.enqueue(k);
+      });
+      localStorage.removeItem('mdro_deletions_manifest');
+      localStorage.removeItem('mdro_deletions_applied_ts');
+    }
+  } catch {}
+})();
+
 window.addEventListener('online', async () => {
   isOnline = true;
   updateSyncBadge();
@@ -1513,25 +1895,28 @@ window.addEventListener('online', async () => {
     await initFirebase();
     updateSyncBadge();
   }
-  if (!isRealSyncSession()) {
+  if (!MdrSync.canRead()) {
     toast('🌐 متصل — سجّل الدخول لمزامنة البيانات');
     return;
   }
   if (_currentRole === 'blocked') { toast('📴 لا مزامنة — صلاحياتك تغيرت'); return; }
   if (_currentRole === 'pending') { toast('⏳ جهازك في انتظار الموافقة — البيانات محفوظة وستتزامن بعد التفعيل'); return; }
-  if (isEditor()) {
-    await flushSyncQueue(); // دفع المحلي أولاً
-    schedulePull(200); // اسحب فوراً بعد ما ترجع النت
-    toast('🌐 متصل – جاري المزامنة');
+  // القراءة/الاستماع متاح لأي جلسة مسجّلة (canRead)؛ الدفع/الرفع يُنفَّذ داخلياً
+  // فقط إن توفرت جلسة كتابة حقيقية (canSync داخل hardSync/flushPending).
+  const ch = await MdrSync.hardSync().catch(() => false); // دفع (للكاتب) + سحب (للقراءة) + استماع
+  if (ch) mdroRender();
+  toast('🌐 متصل – جاري المزامنة');
+});
+window.addEventListener('offline', () => { isOnline = false; updateSyncBadge(); toast('📴 أوفلاين – يحفظ محلياً'); });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && isOnline && MdrSync.canRead() && _currentRole !== 'pending' && _currentRole !== 'blocked') {
+    schedulePull(300);
   }
 });
-window.addEventListener('offline', () => { isOnline=false; updateSyncBadge(); toast('📴 أوفلاين – يحفظ محلياً'); });
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && dbCompat && isOnline && isRealSyncSession()) schedulePull(300);
-});
+// عند الخروج/قطع الجلسة — يُوقف الاستماع الحي ولا يضيع شيء (يُدفع لاحقاً)
+window.MDRo_Sync_stop = function () { MdrSync.stopListening(); };
 
-// تحقق دوري قديم (نظام الأجهزة) — أُلغي نهائياً: الحسابات عبر Firebase،
-// ولا يلزم تسجيل خروج بسبب مستند device قديم.
+// السلوك القديم لنظام الأجهزة — أُلغي نهائياً (الأدوار من MDROAuth فقط)
 setInterval(() => { /* لا فحص أجهزة — الأدوار من MDROAuth فقط */ }, 5 * 60 * 1000);
 </script>
 </head>

@@ -18,6 +18,11 @@ service cloud.firestore {
     function ownerDoc() { return /databases/$(database)/documents/bootstrap/owner; }
     function ownerCodeDoc() { return /databases/$(database)/documents/bootstrap/owner-code; }
 
+    // ===== مسبار توقيت السحابة (حساب فرق الساعة للمقارنة الزمنية العادلة) =====
+    match /mdro_sync_probe/{doc} {
+      allow read, write: if signedIn();
+    }
+
     // ===== بيانات تطبيق MDRO (البيانات الطبية) =====
     // القراءة لكل مستخدم مسجّل الدخول (الـ viewer يُشاهد التقارير فقط)،
     // والكتابة للمالك والمحرّر فقط عبر canWrite — حماية احترافية للبيانات.

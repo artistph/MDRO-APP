@@ -525,6 +525,12 @@ window.MDROAuth = (function () {
     try {
       sessionAuth.onAuthStateChanged((user) => {
         if (user) {
+          // المستخدم المجهول (anonymous) ليس حساباً حقيقياً — يُستخدم للقراءة
+          // فقط ولا ينبغي أن يحل محل جلسة حساب حقيقي، خصوصاً لو وصل حدثُه
+          // متأخراً بعد تسجيل دخول حقيقي (كان يعيد الجلسة إلى anonymous بعد
+          // ثوانٍ فيظن التطبيق أنه يستطيع المزامنة ثم تفشل الكتابة
+          // permission-denied وتظل الحالة عالقة عند الجهاز فقط).
+          if (user.isAnonymous) return;
           let disp = user.email || '';
           try { disp = sessionStorage.getItem('mdro_display_email') || disp; } catch {}
           fetchUserWithRetry(user.uid).then(d => {
@@ -549,7 +555,7 @@ window.MDROAuth = (function () {
             }
             // شفاء ذاتي: لو مستند المستخدم فشل جلبه لحظياً (شبكة) فبقي الاسم/البريد
             // فارغين — نملأهما من مصدر المالك الحقيقي فوراً.
-            if (role === 'owner' && (!name || !email)) ensureOwnerIdent();
+            if (role === 'owner' && (!name || !disp)) ensureOwnerIdent();
           });
         } else {
           const cached = cachedSession();
