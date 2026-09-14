@@ -1280,7 +1280,20 @@ async function initFirebase() {
     // dbCompat — لأن Firestore Rules تتطلب canWrite() لأي كتابة في mdro_data.
     const auth = getAuth(app);
     if (!auth.currentUser) {
-      await signInAnonymously(auth).catch(e => console.warn('Auth:', e));
+      // ننتظر لحظة لاستقرار الجلسة المحفوظة قبل إنشاء anonymous —
+      // لأن استرجاع الحساب من التخزين المحلي قد يكون غير متزامن (IndexedDB).
+      // لو سبقنا anonymous واستبدلنا الجلسة الحقيقية المحفوظة، يصبح
+      // sessionAuth.currentUser مجهول → canSync تفشل → لا رفع حتى
+      // يسجّل المستخدم خروج ثم دخول (ظاهر كأن المزامنة لا تعمل).
+      await new Promise(r => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; r(); } };
+        auth.onAuthStateChanged(u => { if (u) finish(); });
+        setTimeout(finish, 2000);
+      });
+      if (!auth.currentUser) {
+        await signInAnonymously(auth).catch(e => console.warn('Auth:', e));
+      }
     }
 
     // تحميل OWNER_SECRET من Firestore — مش مخزن في الكود
@@ -9597,8 +9610,25 @@ async function checkSession() {
     // آخر حساب سجّل فعلياً على الجهاز هو الأدق — يُحدَّث فقط عبر جلسة حقيقية
     const lu = (typeof mdroGetLastUser === 'function') ? mdroGetLastUser() : null;
     const savedRole = (lu && lu.role) ? lu.role : (localStorage.getItem('mdro_device_role') || '');
+    // شفاء ذاتي Migration: لو الجلسة الفعلية على الجهاز أصبحت anonymous (حدث قديم
+    // كان signInAnonymously يسبق استرجاع الجلسة المحفوظة ويستبدلها) بينما عرف
+    // الجهاز حساباً حقيقياً (كاش جلسة حقيقي بمعرّف غير owner-code-local) —
+    // لا نفتح بصمت بجلسة مكسورة المزامنة (تنخدع بأنها "محفوظة") بل نظهر
+    // شاشة الدخول ليعيد تسجيل دخوله الحقيقي مرة واحدة ويُصلَح التخزين.
+    const forceRelogin = (function () {
+      try {
+        const jc = sessionAuth && sessionAuth.currentUser;
+        if (!jc || !jc.isAnonymous) return false;
+        const cs = (typeof window.MDROAuth !== 'undefined' && window.MDROAuth.cachedSession) ? window.MDROAuth.cachedSession() : null;
+        if (cs && cs.uid && cs.uid !== 'owner-code-local' && cs.role && (cs.role === 'owner' || cs.role === 'editor' || cs.role === 'viewer')) {
+          try { localStorage.removeItem('mdro_session_active'); } catch {}
+          return true;
+        }
+      } catch {}
+      return false;
+    })();
     const sessionActive = localStorage.getItem('mdro_session_active');
-    if (savedSession && savedRole && savedRole !== 'pending' && savedRole !== 'blocked') {
+    if (!forceRelogin && savedSession && savedRole && savedRole !== 'pending' && savedRole !== 'blocked') {
       _currentRole = savedRole;
       document.getElementById('loginScreen').style.display = 'none';
       applyRoleUI();
