@@ -2785,7 +2785,6 @@ function save(key, data) {
   if (_isEmpty) {
     _deleteStorageKeys([key]);
   } else {
-    localStorage.setItem(key, JSON.stringify(data));
     pushToCloud(key, data);
   }
   schedulePull();
@@ -3772,15 +3771,10 @@ function saveCase(forceIncomplete) {
   };
 
   if (forceIncomplete) {
-    // لو كنا بنكمل حالة من قائمة الناقص — اشيل القديمة عشان ميحصلش تكرار
+    // لو كنا بنكمل حالة من قائمة الناقص — حفظ في نفس المكان بنفس id (لا تكرار)
     if (window._editingIncompleteId) {
-      const incYear  = window._editingIncompleteYear || currentYear;
-      const incMonth = window._editingIncompleteMonth !== undefined ? window._editingIncompleteMonth : currentMonth;
-      const incArr   = getIncompleteCases(incYear, incMonth).filter(c => c.id !== window._editingIncompleteId);
-      saveIncompleteCases(incYear, incMonth, incArr);
-      window._editingIncompleteId = null;
-      window._editingIncompleteYear = null;
-      window._editingIncompleteMonth = null;
+      rec.year = window._editingIncompleteYear || currentYear;
+      rec.month = window._editingIncompleteMonth !== undefined ? window._editingIncompleteMonth : currentMonth;
     }
     // لو كنا في حالة تعديل — اشيل النسخة الأصلية من الحالات
     if (window._editingCaseId) {
